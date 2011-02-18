@@ -1,9 +1,24 @@
 # -*- coding: utf-8 -*-
 
-""" class to do database stuff via Twisted """
+"""\
+This class is a Twisted-compatible frontend to dbmix.Db.
+
+It has the same interface, except that all Do* methods return a Deferred.
+
+>>> dbi = dbmix.DbThread([args of dbmix.Db])
+>>>
+>>> @inlineCallbacks
+>>> def foo(what_id):
+>>>     with dbi() as db:
+>>>         yield db.Do("delete from whatever where id=${id}", id=what_id, _empty=1)
+>>>         res = yield db.DoSelect("select id from whatever", _empty=1)
+>>>         for x in res:
+>>>            print res
+>>>         yield db.commit()
+"""
 
 from __future__ import generators,absolute_import
-from smurf import Db
+import dbmix
 from time import time,sleep
 import string
 import re
@@ -12,12 +27,6 @@ from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
 from threading import current_thread,Lock
 from Queue import Queue
-
-# shared
-from sys import exc_info
-
-NoData=Db.NoData
-ManyData=Db.ManyData
 
 def debug(*a):
 	return
@@ -40,7 +49,7 @@ class DbThread(object):
 	def _get_db(self):
 		if self.db:
 			return self.db.pop(0)
-		return Db.Db(*self.args,**self.kwargs)
+		return dbmix.Db(*self.args,**self.kwargs)
 	def _put_db(self,db):
 		self.db.append(db)
 	def __call__(self):
@@ -67,12 +76,10 @@ class _DbThread(object):
 		return False
 
 	def run(self,q):
-		
 		db = self.parent._get_db()
-		running = True
 		debug("START",id(q))
 		res = None
-		while running:
+		while True
 			d = None
 			try:
 				d,proc,a,k = q.get()
@@ -82,27 +89,19 @@ class _DbThread(object):
 					debug("COMMIT",a,k)
 					res = k.get('res',None)
 					db.commit()
-					running = False
+					break
 				elif proc == "ROLLBACK":
 					debug("ROLLBACK",a,k)
 					res = k.get('res',None)
 					db.rollback()
-					running = False
-				elif proc == "DoSelect":
-					cb = k.get('callback',None)
-					if cb:
-						res = 0
-						for d in db.DoSelect(a,k):
-							cb(d)
-							res += 1
-					else:
-						k['_store'] = True
-						res = getattr(db,proc)(*a,**k)
-				else:
-					res = getattr(db,proc)(*a,**k)
-				if d: d.callback(res)
+					break
+				res = getattr(db,proc)(*a,**k)
 			except Exception as e:
-				if d: d.errback()
+				if d:
+					d.errback()
+					d = None
+			finally:
+				if d: d.callback(res)
 		self.parent._put_db(db)
 		debug("STOP",id(q))
 		return res
@@ -126,9 +125,18 @@ class _DbThread(object):
 		return self.done
 
 	def addDone(self,d):
+		"""\
+		Convenience method for terminating a transaction.
+		
+		>>> with dbi() as db:
+		>>>     d = db.Do(...)
+		>>>     db.addDone(d)
+
+		"""
 		d.addCallbacks(self.commit,self.rollback)
 		
 	def _do(self,job,*a,**k):
+		"""Wrapper for calling the background thread."""
 		d = Deferred()
 		debug("QUEUE",id(self.q),job,a,k)
 		self.q.put((d,job,a,k))
@@ -139,5 +147,9 @@ class _DbThread(object):
 	def DoFn(self,*a,**k):
 		return self._do("DoFn",*a,**k)
 	def DoSelect(self,*a,**k):
+		k["_store"] = 1
 		return self._do("DoSelect",*a,**k)
+	Do.__doc__ = dbmix.Db.Do.__doc__ + "\nReturns a Deferred.\n"
+	DoFn.__doc__ = dbmix.Db.DoFn.__doc__ + "\nReturns a Deferred.\n"
+	DoSelect.__doc__ = dbmix.Db.DoSelect.__doc__ + "Returns a Deferred.\n"
 

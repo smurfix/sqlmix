@@ -346,8 +346,20 @@ class Db(object):
 		'_dict' is 1: return entries as dictionary
 		'_write' is 1: use the read/write server ## UNUSED
 		'_empty' is 1: don't throw an error when no data are returned
+		'_callback': pass values to this proc, return count
+		             otherwise return iterator for values
 		"""
+		cb = keys.get('_callback',None)
+		if cb:
+			n = 0
+			for x in self._DoSelect(self, _cmd, **keys):
+				cb(x)
+				n += 1
+			return n
+		else:
+			return self._DoSelect(self, _cmd, **keys):
 
+	def _DoSelect(self, _cmd, **keys):
 		conn=self.conn()
 
 		try:
