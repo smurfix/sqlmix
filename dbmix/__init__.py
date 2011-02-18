@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 
-"""Base class to collect database connections"""
+"""\
+This module provides a thread-safe way to access any Python SQL database with
+* common query syntax
+* short single-line statements
+"""
 
 from __future__ import generators
-from smurf import Cf
 from time import time,sleep
 import string
 import re
-
-# shared
 from sys import exc_info
-
 from threading import local
 
 def fixup_error(cmd):
@@ -22,83 +22,64 @@ def fixup_error(cmd):
 
 class db_data(object):
 	sequential = False
-	def __init__(self, p="",**kwargs):
-		"""host,port,database,username,password"""
-
-		try: self.host = kwargs["host"]
-		except KeyError:
-			try: self.host = Cf["DATAHOST"+p]
-			except KeyError: self.host = Cf["DATAHOST"]
-
-		try: self.port = int(kwargs["port"])
-		except KeyError:
-			try: self.port = int(Cf["DATAPORT"+p])
+	def __init__(self, cfg,pre, **kwargs):
+		"""standard databases: host,port,database,username,password"""
+		for f in "host port database username password".split():
+			try:
+				v = kwargs[f]
 			except KeyError:
-				try: self.port = int(Cf["DATAPORT"])
-				except KeyError: self.port = None
-
-		try: self.dbname = kwargs["database"]
-		except KeyError:
-			try: self.dbname = Cf["DATABASE"+p]
-			except KeyError: self.dbname = Cf["DATABASE"]
-
-		try: self.username = kwargs["username"]
-		except KeyError:
-			try: self.username = Cf["DATAUSER"+p]
-			except KeyError: self.username = Cf["DATAUSER"]
-
-		try: self.password = kwargs["password"]
-		except KeyError:
-			try: self.password = Cf["DATAPASS"+p]
-			except KeyError: self.password = Cf["DATAPASS"]
-
+				v = cfg.get(pre,f)
+			setattr(self,f,v)
 
 class _db_mysql(db_data):
-	def __init__(self,p,**kwargs):
+	def __init__(self,cfg,pre,**kwargs):
 		self.DB = __import__("MySQLdb")
 		self.DB.cursors = __import__("MySQLdb.cursors").cursors
-		db_data.__init__(self,p,**kwargs)
-#		if self.port:
-#			self.host = self.host+":"+str(self.port)
-#			self.port=None
+		db_data.__init__(self,cfg,pre,**kwargs)
 
-	def conn(self,p=None,**kwargs):
-		return self.DB.connect(db=self.dbname, host=self.host, user=self.username, passwd=self.password, port=self.port, charset="utf8")
+	def conn(self,**kwargs):
+		return self.DB.connect(db=self.database, host=self.host, user=self.username, passwd=self.password, port=self.port, charset="utf8")
 
 class _db_odbc(db_data):
-	def __init__(self,p,**kwargs):
+	def __init__(self,cfg,pre,**kwargs):
 		self.DB = __import__("mx.ODBC.iODBC")
-		db_data.__init__(self,p,**kwargs)
+		db_data.__init__(self,cfg,pre,**kwargs)
 
-	def conn(self,p=None,**kwargs):
+	def conn(self,**kwargs):
 		if self.port:
 			self.host = self.host+":"+str(self.port)
 			self.port=None
 
-		return self.DB.connect(database=self.dbname, host=self.host, user=self.username, password=self.password)
+		return self.DB.connect(database=self.database, host=self.host, user=self.username, password=self.password)
 
 class _db_postgres(db_data):
-	def __init__(self,p,**kwargs):
+	def __init__(self,cfg,pre,**kwargs):
 		self.DB = __import__("pgdb")
-		db_data.__init__(self,p,**kwargs)
+		db_data.__init__(self,cfg,pre,**kwargs)
 
-	def conn(self,p=None,**kwargs):
+	def conn(self,**kwargs):
 		if self.port:
 			self.host = self.host+":"+str(self.port)
 			self.port=None
 
-		return self.DB.connect(database=self.dbname,host=self.host, user=self.username, password=self.password)
+		return self.DB.connect(database=self.database,host=self.host, user=self.username, password=self.password)
 
 class _db_sqlite(db_data):
 	sequential = True
-	def __init__(self,p,**kwargs):
+	def __init__(self,cfg,pre,**kwargs):
 		self.DB = __import__("pysqlite2.dbapi2")
 		if hasattr(self.DB,"dbapi2"): self.DB=self.DB.dbapi2
-		db_data.__init__(self,p,**kwargs)
+		db_data.__init__(self,cfg,pre,**kwargs)
 
-	def conn(self,p=None,**kwargs):
-		return self.DB.connect(self.dbname)
+	def conn(self,**kwargs):
+		return self.DB.connect(self.database)
 
+_databases = {
+	    "mysql": _db_mysql,
+	    "odbc": _db_odbc,
+	    "postgres": _db_postgres,
+	    "sqlite": _db_sqlite,
+}
 
 
 ## possible parsers
@@ -170,23 +151,36 @@ class ManyData(Exception):
 #	pass
 
 class Db(object):
-	"""Collects concurrent database connections"""
+	"""\
+	Main database connection object.
+	"""
 
-	def __init__(self, prefix=None, **kwargs):
+	# These variables cache whether the database supports turning off
+	# autocommit, or setting the read wait timeout.
+	_set_ac1 = True
+	_set_ac2 = True
+	_set_timeout = True
+	def __init__(self, name=None, cfgfile=None, **kwargs):
 		"""\
-		Initialize connection collection.
-		Keywords: host,port,database,username,password"""
+		Initialize me. Read default parameters from section *name
+		in INI-style configuration file(s) CFGFILE.
+		(Default: section 'database' in ./dbmix.cfg or $HOME/dbmix.cfg)
 
-		if prefix is None:
-			prefix=""
-		else:
-			prefix="_"+prefix.upper()
-		self.prefix=prefix
-		try: dbtype = kwargs["dbtype"]
+		Keywords: dbtype,host,port,database,username,password
+		"""
+
+		if cfgfile is None:
+			cfgfile=["./dbmix.cfg", sys.path.expanduser("~/.dbmix.cfg")]
+		if name is None:
+			name="database"
+		self.cfg=configparser.ConfigParser({'dbtype':'mysql', 'host':'localhost'})
+		self.cfg.read(cfgfile)
+
+		try:
+			dbtype = kwargs["dbtype"]
 		except KeyError:
-			try: dbtype=Cf["DATADB"+prefix]
-			except KeyError: dbtype=Cf["DATADB"]
-		self.DB = globals()["_db_"+dbtype](prefix, **kwargs)
+			dbtype=self.cfg.get(name,"type")
+		self.DB = _databases[dbtype](cfg,name, **kwargs)
 		self.DB.dbtype=dbtype
 
 		self._c = local()
@@ -203,20 +197,25 @@ class Db(object):
 			 = _parsers[self.DB.DB.paramstyle]
 		
 	def conn(self, skip=False):
-		"""Allocate a database connection"""
+		"""Create a connection to the underlying database"""
 		
 		if not hasattr(self._c,"conn") or self._c.conn is None:
 			if skip: return None
 
 			Ex=None
-			r = self.DB.conn(self.prefix)
-			try: r.setconnectoption(self.DB.DB.SQL.AUTOCOMMIT, self.DB.DB.SQL.AUTOCOMMIT_OFF)
-			except AttributeError:
+			r = self.DB.conn()
+
+			if self._set_ac1:
+				try: r.setconnectoption(self.DB.DB.SQL.AUTOCOMMIT, self.DB.DB.SQL.AUTOCOMMIT_OFF)
+				except AttributeError: self._set_ac1 = False
+				else: self._set_ac2 = False
+			if self._set_ac2:
 				try: r.cursor(*self.CArgs).execute("SET AUTOCOMMIT=0")
-				except Exception: pass # *sigh*
+				except Exception: self._set_ac2 = False
 		
-			try: r.cursor(*self.CArgs).execute("SET WAIT_TIMEOUT=7200") # 2h
-			except Exception: pass
+			if self._set_timeout:
+				try: r.cursor(*self.CArgs).execute("SET WAIT_TIMEOUT=7200") # 2h
+				except Exception: self._set_timeout = False
 
 #			try:
 #				r.stringformat = self.DB.DB.UNICODE_STRINGFORMAT
@@ -283,7 +282,6 @@ class Db(object):
 	def DoFn(self, _cmd, **keys):
 		"""Database-specific DoFn function"""
 		conn=self.conn()
-
 		curs=conn.cursor(*self.CArgs)
 
 		_cmd = self.prep(_cmd, **keys)
