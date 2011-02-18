@@ -164,13 +164,13 @@ class Db(object):
 		"""\
 		Initialize me. Read default parameters from section *name
 		in INI-style configuration file(s) CFGFILE.
-		(Default: section 'database' in ./dbmix.cfg or $HOME/dbmix.cfg)
+		(Default: section 'database' in ./sqlmix.cfg or $HOME/sqlmix.cfg)
 
 		Keywords: dbtype,host,port,database,username,password
 		"""
 
 		if cfgfile is None:
-			cfgfile=["./dbmix.cfg", sys.path.expanduser("~/.dbmix.cfg")]
+			cfgfile=["./sqlmix.cfg", sys.path.expanduser("~/.sqlmix.cfg")]
 		if name is None:
 			name="database"
 		self.cfg=configparser.ConfigParser({'dbtype':'mysql', 'host':'localhost'})

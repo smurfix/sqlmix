@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 """\
-This class is a Twisted-compatible frontend to dbmix.Db.
+This class is a Twisted-compatible frontend to sqlmix.Db.
 
 It has the same interface, except that all Do* methods return a Deferred.
 
->>> dbi = dbmix.DbThread([args of dbmix.Db])
+>>> dbi = sqlmix.DbThread([args of sqlmix.Db])
 >>>
 >>> @inlineCallbacks
 >>> def foo(what_id):
@@ -18,7 +18,7 @@ It has the same interface, except that all Do* methods return a Deferred.
 """
 
 from __future__ import generators,absolute_import
-import dbmix
+import sqlmix
 from time import time,sleep
 import string
 import re
@@ -49,7 +49,7 @@ class DbThread(object):
 	def _get_db(self):
 		if self.db:
 			return self.db.pop(0)
-		return dbmix.Db(*self.args,**self.kwargs)
+		return sqlmix.Db(*self.args,**self.kwargs)
 	def _put_db(self,db):
 		self.db.append(db)
 	def __call__(self):
@@ -149,7 +149,7 @@ class _DbThread(object):
 	def DoSelect(self,*a,**k):
 		k["_store"] = 1
 		return self._do("DoSelect",*a,**k)
-	Do.__doc__ = dbmix.Db.Do.__doc__ + "\nReturns a Deferred.\n"
-	DoFn.__doc__ = dbmix.Db.DoFn.__doc__ + "\nReturns a Deferred.\n"
-	DoSelect.__doc__ = dbmix.Db.DoSelect.__doc__ + "Returns a Deferred.\n"
+	Do.__doc__ = sqlmix.Db.Do.__doc__ + "\nReturns a Deferred.\n"
+	DoFn.__doc__ = sqlmix.Db.DoFn.__doc__ + "\nReturns a Deferred.\n"
+	DoSelect.__doc__ = sqlmix.Db.DoSelect.__doc__ + "Returns a Deferred.\n"
 

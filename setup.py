@@ -13,7 +13,7 @@ parameterized SQL syntax.
 
 """
 
-setup (name = "dbmix",
+setup (name = "sqlmix",
        version = "0.9",
        description = description,
        long_description = long_description,
@@ -22,5 +22,5 @@ setup (name = "dbmix",
        url = "http://smurf.noris.de/code/",
        license = 'Python',
        platforms = ['POSIX'],
-       packages = ['dbmix'],
+       packages = ['sqlmix'],
       )
