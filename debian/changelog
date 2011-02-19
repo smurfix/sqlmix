@@ -1,0 +1,5 @@
+sqlmix (0.9-1) maverick; urgency=low
+
+  * Initial separate packaging
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Fri, 18 Feb 2011 20:04:58 +0100

@@ -1,2 +1,10 @@
 *.pyc
 *.swp
+debian/files
+debian/*.debhelper
+debian/*.substvars
+debian/*.log
+build/
+build-stamp
+build-python*
+debian/python-sqlmix/
