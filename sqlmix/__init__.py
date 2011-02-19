@@ -1,12 +1,36 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import generators,absolute_import
+
 """\
 This module provides a thread-safe way to access any Python SQL database with
-* common query syntax
-* short single-line statements
+* A common and clear syntax for placing values in SQL statements.
+   >> foo,bar = db.DoFn("select ... where id=${key}", key=whatever)
+* single-line SQL commands
+* Common parameters for database setup (no more "db" vs. "database")
+* Single-line SQL statements and single-row SELECTs:
+   >> db.Do("insert ...")
+   >> foo,bar = db.DoFn("select ... where id=123")
+* SELECT statements as iterators:
+   >> for a,b in db.DoSelect("select ..."):
+   >>     ...
 """
+#
+#    Copyright (C) 2011 Matthias urlichs <smurf@smurf.noris.de>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import generators
 from time import time,sleep
 import string
 import re
