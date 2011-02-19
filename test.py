@@ -15,7 +15,7 @@ filterwarnings("ignore",category=RuntimeWarning,lineno=15)
 dbname = os.tempnam("/tmp","sqlmix")
 
 def run_test():
-	db=Db(database=dbname, dbtype="sqlite")
+	db=Db(cfgfile="./test.ini", database=dbname)
 	db.Do("""\
 		create table test1 (
 			id integer primary key not null,
