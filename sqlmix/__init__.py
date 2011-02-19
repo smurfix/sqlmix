@@ -38,6 +38,8 @@ from sys import exc_info
 from threading import local
 import ConfigParser as configparser
 
+__all__ = ["Db","NoData","ManyData"]
+
 def fixup_error(cmd):
 	"""Append the full command to the error message"""
 	e1,e2,e3 = exc_info()
@@ -47,6 +49,7 @@ def fixup_error(cmd):
 
 class db_data(object):
 	sequential = False
+	_store = 1 # safe default
 	def __init__(self, cfg,pre, **kwargs):
 		"""standard databases: host,port,database,username,password"""
 		for f in "host port database username password".split():
@@ -61,6 +64,7 @@ class db_data(object):
 				setattr(self,f,v)
 
 class _db_mysql(db_data):
+	_store = 1
 	def __init__(self,cfg,pre,**kwargs):
 		self.DB = __import__("MySQLdb")
 		self.DB.cursors = __import__("MySQLdb.cursors").cursors
@@ -182,6 +186,8 @@ class ManyData(Exception):
 class Db(object):
 	"""\
 	Main database connection object.
+
+	Internally, manages one back-end connection per thread.
 	"""
 
 	# These variables cache whether the database supports turning off
@@ -192,18 +198,17 @@ class Db(object):
 	def __init__(self, name=None, cfgfile=None, **kwargs):
 		"""\
 		Initialize me. Read default parameters from section *name
-		in INI-style configuration file(s) CFGFILE.
-		(Default: section 'database' in ./sqlmix.cfg or $HOME/sqlmix.cfg)
+		in INI-style configuration file(s) `cfgfile`. (This may be
+		a filename or a list of them.)
 
 		Keywords: dbtype,host,port,database,username,password
 		"""
 
-		if cfgfile is None:
-			cfgfile=["./sqlmix.cfg", os.path.expanduser("~/.sqlmix.cfg")]
 		if name is None:
 			name="database"
 		self.cfg=configparser.ConfigParser({'dbtype':'mysql', 'host':'localhost'})
-		self.cfg.read(cfgfile)
+		if cfgfile:
+			self.cfg.read(cfgfile)
 		if not self.cfg.has_section(name):
 			self.cfg.add_section(name)
 
@@ -227,8 +232,8 @@ class Db(object):
 		(self.arg_init, self.arg_do, self.arg_done) \
 			 = _parsers[self.DB.DB.paramstyle]
 		
-	def conn(self, skip=False):
-		"""Create a connection to the underlying database"""
+	def _conn(self, skip=False):
+		"""Create a connection to the underlying database."""
 		
 		if not hasattr(self._c,"conn") or self._c.conn is None:
 			if skip: return None
@@ -260,43 +265,63 @@ class Db(object):
 		return self._c.conn
 
 	def commit(self):
+		"""\
+		Commit the current transaction.
+		
+		This calls all procedures that have been registered with `call_committed`
+		in reverse order, and discards all calls registered with `call_rolledback`.
+		"""
 		if self._trace:
 			self._trace("Commit","","")
-		c = self.conn(skip=True)
+		c = self._conn(skip=True)
 		if c: c.commit()
 
 		# callbacks
+		self._c.rolledback = None
 		if hasattr(self._c,"committed") and self._c.committed:
 			x = self._c.committed
 			self._c.committed = None
 			for proc,a,k in x[::-1]:
 				proc(*a,**k)
-		self._c.rolledback = None
 
 		#self._conn.cursor(*self.CArgs).execute('BEGIN')
 
 	def rollback(self):
+		"""\
+		Roll back the current transaction.
+		
+		This calls all procedures that have been registered with `call_rolledback`
+		in reverse order, and discards all calls registered with `call_committed`.
+		"""
 		if self._trace:
 			self._trace("RollBack","","")
-		c = self.conn(skip=True)
+		c = self._conn(skip=True)
 		if c: c.rollback()
 
 		# cancel callbacks
+		self._c.committed = None
 		if hasattr(self._c,"rolledback") and self._c.rolledback:
 			x = self._c.rolledback
 			self._c.rolledback = None
 			for proc,a,k in x[::-1]:
 				proc(*a,**k)
-		self._c.committed = None
 
 		#self._conn.cursor(*self.CArgs).execute('BEGIN')
 
 	def call_committed(self,proc,*a,**k):
+		"""\
+		Remember to call a procedure (with given parameters) after committing the
+		current transaction.
+		"""
 		if not hasattr(self._c,"committed") or self._c.committed is None:
 			self._c.committed = []
 		self._c.committed.append((proc,a,k))
 
 	def call_rolledback(self,proc,*a,**k):
+		"""\
+		Remember to call a procedure (with given parameters) after rolling back the
+		current transaction.
+		"""
 		if not hasattr(self._c,"rolledback") or self._c.rolledback is None:
 			self._c.rolledback = []
 		self._c.rolledback.append((proc,a,k))
@@ -311,8 +336,22 @@ class Db(object):
 		return self.arg_done(_cmd,args)
 		
 	def DoFn(self, _cmd, **kv):
-		"""Database-specific DoFn function"""
-		conn=self.conn()
+		"""Select one (and only one) row.
+
+		Example:
+		>>>	i,before = db.DoFn("select id,last_login from sometable where name=${myname}", myname="Fred")
+
+		This function always returns an array of values.
+		Thus, single-value assignments need a comma after the variable name.
+		>>>	i, = db.DoFn("select id from sometable where name=${myname}", myname="Fred")
+		
+		Special keywords:
+
+		_dict is True: return a column/value dictionary.
+		>>>	info = dict(db.DoFn("select * from sometable where name=${myname}",myname="Fred"))
+
+		"""
+		conn=self._conn()
 		curs=conn.cursor(*self.CArgs)
 
 		_cmd = self.prep(_cmd, **kv)
@@ -341,7 +380,7 @@ class Db(object):
 
 	def Do(self, _cmd, **kv):
 		"""Database-specific Do function"""
-		conn=self.conn()
+		conn=self._conn()
 		curs=conn.cursor(*self.CArgs)
 
 		_cmd = self.prep(_cmd, **kv)
@@ -361,19 +400,30 @@ class Db(object):
 		return r
 
 	def DoSelect(self, _cmd, **kv):
-		"""Database-specific DoSelect function.
+		"""Select one or more rows from a database.
+
+		>>>	for i,name in db.DoSelect("select id,name from sometable where name like ${pattern}", pattern='f%d'):
+		...		print i,name
 		
-		'_store' is 0: force save on server
-		'_store' is 1: force save on client
+		The iterator always returns an array of values.
+		Thus, single-value assignments need a comma after the variable name.
+		>>>	for name, in db.DoSelect("select name from sometable where name like ${pattern}", pattern='f%d'):
+		...		print name
+		
+		Special keywords:
+
+		'_store' is 0: force saving the result on the server
+		'_store' is 1: force saving the result on the client
+		Otherwise:     save on the server if the backend supports multiple
+		               concurrent cursors on a single connection
 
 		'_head' is 1: first return is headers as text
 		'_head' is 2: first return is DB header tuples
 
-		'_dict' is 1: return entries as dictionary
-		'_write' is 1: use the read/write server ## UNUSED
+		'_dict' is 1: return entries as dictionary instead of list
 		'_empty' is 1: don't throw an error when no data are returned
-		'_callback': pass values to this proc, return count
-		             otherwise return iterator for values
+		'_callback': pass rows to a procedure, return row count
+
 		"""
 		cb = kv.get('_callback',None)
 		if cb:
@@ -386,9 +436,9 @@ class Db(object):
 			return self._DoSelect(_cmd, **kv)
 
 	def _DoSelect(self, _cmd, **kv):
-		conn=self.conn()
+		conn=self._conn()
 
-		store=kv.get("_store",None)
+		store=kv.get("_store",self.DB._store)
 		as_dict=kv.get("_dict",None)
 
 		if store:

@@ -8,7 +8,7 @@ This class is a Twisted-compatible frontend to sqlmix.Db.
 It has the same interface, except that all Do* methods return a Deferred.
 Internally, it works by delegating all SQL commands to a separate thread.
 
- >> dbi = sqlmix.DbThread([args of sqlmix.Db])
+ >> dbi = sqlmix.DbPool([args of sqlmix.Db])
  >>
  >> @inlineCallbacks
  >> def foo(what_id):
@@ -45,6 +45,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
 from threading import current_thread,Lock
 from Queue import Queue
+__all__ = ["DbPool"]
 
 def debug(*a):
 	return
@@ -56,12 +57,20 @@ def debug(*a):
 	s=" ".join((pr(x) for x in a))
 	sys.stderr.write(s+"\n")
 
-class DbThread(object):
+class DbPool(object):
+	"""\
+	Manage a pool of database connections.
+
+	TODO: shrink the pool.
+	"""
 	def __init__(self,*a,**k):
+		"""\
+		Create a pool of database connections, for processing (a sequence of)
+		SQL commands in the background.
+		"""
 		self.db = []
 		self.args = a
 		self.kwargs = k
-		self.kwargs['threaded'] = False
 		self.lock = Lock()
 
 	def _get_db(self):
@@ -71,6 +80,16 @@ class DbThread(object):
 	def _put_db(self,db):
 		self.db.append(db)
 	def __call__(self):
+		"""\
+		Get a new connection from the database pool (or start a new one)
+		and return a thread handler.
+
+		Usage:
+		>>> dbpool = DbPool(...) # arguments like sqlmix.Db()
+		>>>	with dbpool() as db:
+		>>>		d = db.Do("...")
+		>>>		assert(isinstance(d,twisted.internet.defer.Deferred))
+		"""
 		r = _DbThread(self)
 		debug("NEW",id(r))
 		return r
@@ -97,7 +116,7 @@ class _DbThread(object):
 		db = self.parent._get_db()
 		debug("START",id(q))
 		res = None
-		while True
+		while True:
 			d = None
 			try:
 				d,proc,a,k = q.get()
