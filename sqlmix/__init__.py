@@ -32,10 +32,11 @@ This module provides a thread-safe way to access any Python SQL database with
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from time import time,sleep
-import string
+import os
 import re
 from sys import exc_info
 from threading import local
+import ConfigParser as configparser
 
 def fixup_error(cmd):
 	"""Append the full command to the error message"""
@@ -50,10 +51,14 @@ class db_data(object):
 		"""standard databases: host,port,database,username,password"""
 		for f in "host port database username password".split():
 			try:
-				v = kwargs[f]
-			except KeyError:
-				v = cfg.get(pre,f)
-			setattr(self,f,v)
+				try:
+					v = kwargs[f]
+				except KeyError:
+					v = cfg.get(pre,f)
+			except configparser.NoOptionError:
+				pass
+			else:
+				setattr(self,f,v)
 
 class _db_mysql(db_data):
 	def __init__(self,cfg,pre,**kwargs):
@@ -194,17 +199,19 @@ class Db(object):
 		"""
 
 		if cfgfile is None:
-			cfgfile=["./sqlmix.cfg", sys.path.expanduser("~/.sqlmix.cfg")]
+			cfgfile=["./sqlmix.cfg", os.path.expanduser("~/.sqlmix.cfg")]
 		if name is None:
 			name="database"
 		self.cfg=configparser.ConfigParser({'dbtype':'mysql', 'host':'localhost'})
 		self.cfg.read(cfgfile)
+		if not self.cfg.has_section(name):
+			self.cfg.add_section(name)
 
 		try:
 			dbtype = kwargs["dbtype"]
 		except KeyError:
 			dbtype=self.cfg.get(name,"type")
-		self.DB = _databases[dbtype](cfg,name, **kwargs)
+		self.DB = _databases[dbtype](self.cfg,name, **kwargs)
 		self.DB.dbtype=dbtype
 
 		self._c = local()
@@ -303,12 +310,12 @@ class Db(object):
 		_cmd = re.sub(r"\$\{([a-zA-Z][a-zA-Z_0-9]*)\}",_prep,_cmd)
 		return self.arg_done(_cmd,args)
 		
-	def DoFn(self, _cmd, **keys):
+	def DoFn(self, _cmd, **kv):
 		"""Database-specific DoFn function"""
 		conn=self.conn()
 		curs=conn.cursor(*self.CArgs)
 
-		_cmd = self.prep(_cmd, **keys)
+		_cmd = self.prep(_cmd, **kv)
 		try:
 			apply(curs.execute, _cmd)
 		except:
@@ -319,14 +326,9 @@ class Db(object):
 		if self._trace:
 			self._trace("DoFn",_cmd,val)
 
-		try:
-			as_dict=keys["_dict"]
-		except KeyError:
-			as_dict=0
-		else:
-			if as_dict:
-				def first(x): return x[0]
-				as_dict = map(first, curs.description)
+		as_dict=kv.get("_dict",None)
+		if as_dict:
+			as_dict = map(lambda x:x[0], curs.description)
 
 		if not val:
 			raise NoData,_cmd
@@ -337,12 +339,12 @@ class Db(object):
 			val = dict(zip(as_dict,val))
 		return val
 
-	def Do(self, _cmd, **keys):
+	def Do(self, _cmd, **kv):
 		"""Database-specific Do function"""
 		conn=self.conn()
 		curs=conn.cursor(*self.CArgs)
 
-		_cmd = self.prep(_cmd, **keys)
+		_cmd = self.prep(_cmd, **kv)
 		try:
 			apply(curs.execute, _cmd)
 		except:
@@ -354,11 +356,11 @@ class Db(object):
 
 		if self._trace:
 			self._trace("DoFn",_cmd,r)
-		if r == 0 and not keys.has_key("_empty"):
+		if r == 0 and not kv.has_key("_empty"):
 			raise NoData,_cmd
 		return r
 
-	def DoSelect(self, _cmd, **keys):
+	def DoSelect(self, _cmd, **kv):
 		"""Database-specific DoSelect function.
 		
 		'_store' is 0: force save on server
@@ -373,28 +375,21 @@ class Db(object):
 		'_callback': pass values to this proc, return count
 		             otherwise return iterator for values
 		"""
-		cb = keys.get('_callback',None)
+		cb = kv.get('_callback',None)
 		if cb:
 			n = 0
-			for x in self._DoSelect(self, _cmd, **keys):
+			for x in self._DoSelect(_cmd, **kv):
 				cb(x)
 				n += 1
 			return n
 		else:
-			return self._DoSelect(self, _cmd, **keys):
+			return self._DoSelect(_cmd, **kv)
 
-	def _DoSelect(self, _cmd, **keys):
+	def _DoSelect(self, _cmd, **kv):
 		conn=self.conn()
 
-		try:
-			store=keys["_store"]
-		except KeyError:
-			store=None
-
-		try:
-			as_dict=keys["_dict"]
-		except KeyError:
-			as_dict=None
+		store=kv.get("_store",None)
+		as_dict=kv.get("_dict",None)
 
 		if store:
 			curs=conn.cursor(*self.CArgs)
@@ -403,39 +398,30 @@ class Db(object):
 		else:
 			curs=conn.cursor(*self.CArgs)
 
-		_cmd = self.prep(_cmd, **keys)
+		_cmd = self.prep(_cmd, **kv)
 		try:
 			apply(curs.execute, _cmd)
 		except:
 			fixup_error(_cmd)
 			raise
 	
-		def first(x): return x[0]
-		try:
-			head=keys["_head"]
-		except KeyError:
-			pass
-		else:
-			if head:
-				if head>1:
-					yield curs.description
-				else:
-					yield map(first, curs.description)
+		head = kv.get("_head",None)
+		if head:
+			if head>1:
+				yield curs.description
+			else:
+				yield map(lambda x:x[0], curs.description)
 
-		try:
-			as_dict=keys["_dict"]
-		except KeyError:
-			as_dict=0
-		else:
-			if as_dict:
-				as_dict = map(first, curs.description)
+		as_dict=kv.get("_dict",None)
+		if as_dict:
+			as_dict = map(lambda x:x[0], curs.description)
 
 		val=curs.fetchone()
 		if not val:
 			if self._trace:
 				self._trace("DoSelect",_cmd,None)
 
-			if not keys.has_key("_empty"):
+			if not kv.has_key("_empty"):
 				raise NoData,_cmd
 
 		n=0
@@ -445,9 +431,10 @@ class Db(object):
 				yield dict(zip(as_dict,val))
 			else:
 				yield val[:]
-
+				# need to copy because the array may be re-used
+				# internally by the database driver, but the consumer
+				# might want to store/modify it
 			val=curs.fetchone()
-
 
 		if self._trace:
 			self._trace("DoSelect",_cmd,n)
