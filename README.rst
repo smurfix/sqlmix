@@ -123,11 +123,3 @@ I reserve the right to re-publish this library under a newer version of the
 GPL, but (given the significant differences between v2 and v3) do not want
 to allow an automagic re-licensing.
 
-* A common and clear syntax for placing values in SQL statements.
-   >> foo,bar = db.DoFn("select ... where id=${key}", key=whatever)
-* Single-line SQL statements and single-row SELECTs:
-   >> db.Do("insert ...")
-   >> foo,bar = db.DoFn("select ... where id=123")
-* SELECT statements as iterators:
-   >> for a,b in db.DoSelect("select ..."):
-   >>     ...
