@@ -10,6 +10,7 @@ build: build-stamp
 build-stamp: $(PYVERS:%=build-python%)
 	touch $@
 build-python%:
+	python$* test.py
 	python$* setup.py build
 	python$*-dbg setup.py build
 	touch $@
@@ -52,10 +53,6 @@ binary-arch: build install
 	dh_installchangelogs -a
 	dh_installdocs -a
 	dh_installmenu -a
-	dh_strip -ppython-twisted-bin --dbg-package=python-twisted-bin-dbg
-	rm -rf debian/python-twisted-bin-dbg/usr/share/doc/python-twisted-bin-dbg
-	ln -s python-twisted-bin \
-	    debian/python-twisted-bin-dbg/usr/share/doc/python-twisted-bin-dbg
 	dh_compress -a -X.py
 	dh_fixperms -a
 	dh_pycentral -a
