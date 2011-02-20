@@ -36,7 +36,6 @@ import os
 import re
 from sys import exc_info
 from threading import local
-import ConfigParser as configparser
 
 __all__ = ["Db","NoData","ManyData"]
 
@@ -50,33 +49,33 @@ def fixup_error(cmd):
 class db_data(object):
 	sequential = False
 	_store = 1 # safe default
-	def __init__(self, cfg,pre, **kwargs):
-		"""standard databases: host,port,database,username,password"""
+	def __init__(self, **kwargs):
+		"""standard keywords: host,port,database,username,password"""
 		for f in "host port database username password".split():
 			try:
-				try:
-					v = kwargs[f]
-				except KeyError:
-					v = cfg.get(pre,f)
-			except configparser.NoOptionError:
+				v = kwargs[f]
+			except KeyError:
 				pass
 			else:
-				setattr(self,f,v)
+				if v is not None:
+					setattr(self,f,v)
 
 class _db_mysql(db_data):
 	_store = 1
-	def __init__(self,cfg,pre,**kwargs):
+	host="localhost"
+	port=3306
+	def __init__(self, **kwargs):
 		self.DB = __import__("MySQLdb")
 		self.DB.cursors = __import__("MySQLdb.cursors").cursors
-		db_data.__init__(self,cfg,pre,**kwargs)
+		db_data.__init__(self,**kwargs)
 
 	def conn(self,**kwargs):
 		return self.DB.connect(db=self.database, host=self.host, user=self.username, passwd=self.password, port=self.port, charset="utf8")
 
 class _db_odbc(db_data):
-	def __init__(self,cfg,pre,**kwargs):
+	def __init__(self, **kwargs):
 		self.DB = __import__("mx.ODBC.iODBC")
-		db_data.__init__(self,cfg,pre,**kwargs)
+		db_data.__init__(self,**kwargs)
 
 	def conn(self,**kwargs):
 		if self.port:
@@ -86,9 +85,9 @@ class _db_odbc(db_data):
 		return self.DB.connect(database=self.database, host=self.host, user=self.username, password=self.password)
 
 class _db_postgres(db_data):
-	def __init__(self,cfg,pre,**kwargs):
+	def __init__(self, **kwargs):
 		self.DB = __import__("pgdb")
-		db_data.__init__(self,cfg,pre,**kwargs)
+		db_data.__init__(self,**kwargs)
 
 	def conn(self,**kwargs):
 		if self.port:
@@ -99,10 +98,10 @@ class _db_postgres(db_data):
 
 class _db_sqlite(db_data):
 	sequential = True
-	def __init__(self,cfg,pre,**kwargs):
+	def __init__(self, **kwargs):
 		self.DB = __import__("pysqlite2.dbapi2")
 		if hasattr(self.DB,"dbapi2"): self.DB=self.DB.dbapi2
-		db_data.__init__(self,cfg,pre,**kwargs)
+		db_data.__init__(self,**kwargs)
 
 	def conn(self,**kwargs):
 		return self.DB.connect(self.database)
@@ -195,28 +194,13 @@ class Db(object):
 	_set_ac1 = True
 	_set_ac2 = True
 	_set_timeout = True
-	def __init__(self, name=None, cfgfile=None, **kwargs):
+	def __init__(self, **kwargs):
 		"""\
-		Initialize me. Read default parameters from section *name
-		in INI-style configuration file(s) `cfgfile`. (This may be
-		a filename or a list of them.)
-
-		Keywords: dbtype,host,port,database,username,password
+		Possible keywords: dbtype,host,port,database,username,password
 		"""
 
-		if name is None:
-			name="database"
-		self.cfg=configparser.ConfigParser({'dbtype':'mysql', 'host':'localhost'})
-		if cfgfile:
-			self.cfg.read(cfgfile)
-		if not self.cfg.has_section(name):
-			self.cfg.add_section(name)
-
-		try:
-			dbtype = kwargs["dbtype"]
-		except KeyError:
-			dbtype=self.cfg.get(name,"dbtype")
-		self.DB = _databases[dbtype](self.cfg,name, **kwargs)
+		dbtype = kwargs.get("dbtype","mysql")
+		self.DB = _databases[dbtype](**kwargs)
 		self.DB.dbtype=dbtype
 
 		self._c = local()

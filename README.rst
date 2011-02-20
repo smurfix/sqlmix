@@ -69,17 +69,6 @@ Using this module is rather simple.
 >>>	assert n == 3
 >>>	print "Success."
 
-You can also import from a standard INI-style configuration file.
->>>	db = Db(name="test", cfgfile="./sql.cfg")
-
-with sql.cfg containing, to be compatible with the first example above,
-
->>>	[DEFAULT]
->>>	username=testuser
->>>	password=testpass
->>>	[test]
->>>	database=testdb
-
 Error Handling
 --------------
 
