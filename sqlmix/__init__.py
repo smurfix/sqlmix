@@ -215,7 +215,7 @@ class Db(object):
 		try:
 			dbtype = kwargs["dbtype"]
 		except KeyError:
-			dbtype=self.cfg.get(name,"type")
+			dbtype=self.cfg.get(name,"dbtype")
 		self.DB = _databases[dbtype](self.cfg,name, **kwargs)
 		self.DB.dbtype=dbtype
 
