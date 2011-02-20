@@ -28,7 +28,7 @@ Description: Database-agnostic SQL frontend
  .
  * A common and clear syntax for placing values in SQL statements.
    (The Python DBI supports five incompatible ones.)
-   >>> foo,bar = db.DoFn("select ... where id=${key}", key=whatever)
+   >>> foo,bar = db.DoFn("select ... where id=\${key}", key=whatever)
  .
  An adapter for the Twisted framework is included.
 
