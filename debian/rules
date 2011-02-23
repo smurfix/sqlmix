@@ -6,8 +6,13 @@ SHELL = /bin/bash
 PYVERS	:= $(shell pyversions -vs)
 VER	:= $(shell /usr/bin/python -c 'import sys; print sys.version[:3]')
 
+sql_diff: sql_diff.g
+	yapps $^
+	mv $@.py $@
+	chmod +x $@
+
 build: build-stamp
-build-stamp: $(PYVERS:%=build-python%)
+build-stamp: $(PYVERS:%=build-python%) sql_diff
 	touch $@
 build-python%:
 	python$* test.py
@@ -36,6 +41,7 @@ install-python%: install-prereq
 binary-indep: build install
 	dh_testdir
 	dh_testroot
+	dh_install
 	dh_installchangelogs -i
 	dh_installdocs -i
 	dh_installmenu -i

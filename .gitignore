@@ -8,3 +8,4 @@ build/
 build-stamp
 build-python*
 debian/python-sqlmix/
+sql_diff

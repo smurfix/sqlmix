@@ -1,3 +1,9 @@
+sqlmix (0.9.1-1) maverick; urgency=low
+
+  * Added sql_diff program
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Tue, 22 Feb 2011 20:22:24 +0100
+
 sqlmix (0.9-1) maverick; urgency=low
 
   * Initial separate packaging

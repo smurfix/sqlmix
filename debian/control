@@ -2,13 +2,13 @@ Source: sqlmix
 Section: python
 Priority: optional
 Maintainer: Matthias Urlichs <smurf@smurf.noris.de>
-Build-Depends: debhelper (>= 5), python-central (>= 0.5), python-all-dev, python-all-dbg (>= 2.5), python-pysqlite2
+Build-Depends: debhelper (>= 5), python-central (>= 0.5), python-all-dev, python-all-dbg (>= 2.5), python-pysqlite2, yapps2
 XS-Python-Version: all
 Standards-Version: 3.7.2
 
 Package: python-sqlmix
 Architecture: all
-Depends: ${python:Depends}, python (>= 2.6)
+Depends: ${python:Depends}, python (>= 2.6), yapps2-runtime
 Recommends: python-mysqldb
 Suggests: python-twisted
 Provides: ${python:Provides}
