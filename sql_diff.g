@@ -38,9 +38,11 @@ class NoSuchTableError(IndexError):
 verbose=1
 _debug=None
 keyseq = 0
+had_output = 0
 
 r="\r"+(" "*70)+"\r"
 INTs = ("int","smallint","bigint","tinyint","mediumint")
+FLOATs = ("float","double")
 
 # Update-Trace
 cnt=0
@@ -59,6 +61,12 @@ def tdump(n):
 		return "ENUM ("+r[:-2]+")"
 	else:
 		return n
+
+def print_fkey_check(what=0):
+	global had_output
+	if had_output == what:
+		had_output=1
+		print "SET FOREIGN_KEY_CHECKS = ",what,";"
 
 class curtime: pass
 class NotGiven: pass
@@ -111,7 +119,7 @@ class Field(object):
 		if self.defval is NotGiven:
 			if self.autoinc or self.nullable:
 				self.defval = None
-			elif self.tname in INTs:
+			elif self.tname in INTs or self.tname in FLOATs:
 				self.defval = "0"
 			elif self.tname == "datetime":
 				self.defval = "0000-00-00 00:00:00"
@@ -1512,6 +1520,7 @@ def main():
 
 		if not opts.execstr: t += ";"
 		if verbose>2 or not opts.execstr:
+			print_fkey_check(0)
 			print t
 
 		if opts.execstr:
@@ -1566,6 +1575,7 @@ def main():
 		if verbose>1:
 			print "+%d -%d /%d  | " % (ins,rem,upd)
 
+	print_fkey_check(1)
 	return exitcode
 
 
