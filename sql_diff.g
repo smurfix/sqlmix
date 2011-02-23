@@ -69,6 +69,10 @@ def print_fkey_check(what=0):
 		print "SET FOREIGN_KEY_CHECKS = ",what,";"
 
 class curtime: pass
+class true:
+	def __str__(self): return "true"
+class false:
+	def __str__(self): return "false"
 class NotGiven: pass
 
 def valprint(x):
@@ -495,6 +499,7 @@ class Table(object):
 		self.fkey={}
 		self.fknames={}
 		self.dupfkeys=[]
+		self.contents=[]
 
 		if db:
 			db.tables[name]=self
@@ -504,6 +509,9 @@ class Table(object):
 		self.last_col=None
 
 		self.db = db
+
+	def update(self, d):
+		self.contents.append(d)
 
 	def clone(self,db):
 		t = Table(self.name)
@@ -1611,6 +1619,7 @@ parser SQL:
 	token ENUM: "(?i)ENUM"
 	token ENGINE: "(?i)ENGINE"
 	token EXISTS: "(?i)EXISTS"
+	token FALSE: "(?i)FALSE"
 	token FOREIGN: "(?i)FOREIGN"
 	token FIRST: "(?i)FIRST"
 	token GLOBAL: "(?i)GLOBAL"
@@ -1633,8 +1642,10 @@ parser SQL:
 	token SET: "(?i)SET"
 	token TABLE: "(?i)TABLE"
 	token TABLES: "(?i)TABLES"
+	token TRUE: "(?i)TRUE"
 	token TYPE: "(?i)TYPE"
 	token UNIQUE: "(?i)UNIQUE"
+	token UNLOCK: "(?i)UNLOCK"
 	token UNSIGNED: "(?i)UNSIGNED"
 	token UPDATE: "(?i)UPDATE"
 	token VALUES: "(?i)VALUES"
@@ -1650,10 +1661,13 @@ parser SQL:
 		( statement ? ";" )* END
 	
 	rule statement:
-		s_create | s_alter | s_drop | s_insert | s_set | s_lock
+		s_create | s_alter | s_drop | s_insert | s_set | s_lock | s_unlock
 
 	rule s_lock:
 		LOCK TABLES qname ( READ | WRITE ) ?
+
+	rule s_unlock:
+		UNLOCK TABLES
 
 	rule s_drop:
 		DROP TABLE (
@@ -1793,9 +1807,13 @@ parser SQL:
 	rule nval: NULL {{ return None }}
 			| val {{ return val }}
 
+	rule tval: TRUE {{ return true }}
+			| FALSE {{ return false }}
+
 	rule ntval: NULL {{ return None }}
 			| CURRENT_TIMESTAMP {{ return curtime }}
 			| sval {{ return sval }}
+			| tval {{ return tval }}
 
 	rule val: NUM {{ return int(NUM) }}
 			| "'" SQTEXT "'" {{ return SQTEXT }}
