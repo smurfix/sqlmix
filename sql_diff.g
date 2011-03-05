@@ -49,6 +49,82 @@ cnt=0
 cntt = ""
 ltm=int(time.time())-1
 
+def bq(n):
+	"""Backquote table/field names"""
+	# We might be nice for readability and only quote keywords.
+	# However, right now we don't bother.
+	return '`'+n+'`'
+			
+def sqlquote(s):
+	if not isinstance(s,basestring):
+		s = str(s)
+	def _prep(p):
+		if p == "\0": return "\\0"
+		else: return "\\"+p
+	s = re.sub("(\\'\0)",_prep,s)
+	return "'"+s+"'"
+
+def print_query(d):
+	res = ""
+	resl={}
+	for fd,val in d.items():
+		if res != "": res += " and "
+		res += bq(fd)+"="
+		if val is None:
+			res += "NULL"
+		else:
+			res += '${%s}' % (fd,)
+			resl[fd]=val
+	return (res,resl)
+	
+def print_update(d):
+	res = ""
+	resl={"_debug":_debug}
+	for fd,val in d.items():
+		if res: res += ", "
+		res += bq(fd)+"="
+
+		if val is None:
+			res += "NULL"
+		else:
+			if not isinstance(val,array.array):
+				val=str(val)
+			res += '${%s_}' % (fd,)
+			resl[fd+'_']=val
+
+	return (res,resl)
+
+def print_insert(d):
+	res = ""
+	resg = ""
+	resl={"_debug":_debug}
+	for fd,val in d.items():
+		if res:
+			res += ", "
+			resg += ", "
+		res += bq(fd)
+		if val is None:
+			resg += "NULL"
+		else:
+			if not isinstance(val,array.array):
+				#try: val=int(val)
+				#except OverflowError: val=float(val)
+				#except ValueError: pass
+				#except TypeError: val=str(val)
+				val=str(val)
+			resg += '${%s_}' % (fd,)
+			resl[fd+'_']=val
+	return ('(%s) VALUES (%s)' % (res,resg), resl)
+
+def posval2dict(fieldpos,ar,br=None):
+	for fd,idx in fieldpos.items():
+		val = ar[idx]
+		if br:
+			if val == br[idx]: continue
+		d[fd] = val
+	return d
+	
+
 def trace(*x):
 	if not verbose: return
 	print >>sys.stderr, r+"  "+" ".join(map(str,x))+"   \r",
@@ -61,6 +137,58 @@ def tdump(n):
 		return "ENUM ("+r[:-2]+")"
 	else:
 		return n
+
+class Uncommon(object): pass
+def common(d1,*d):
+	"""
+	Return a dict with only those keys/values common to all.
+	
+	The first argument needs to be a dict, others can also be lists.
+	If a list/tuple is passed, filter by keys.
+
+	>>> common({1:2,3:4,5:6,7:8},{1:3,5:6,7:8,9:10},[1,3,5,9])
+	{5:6}
+
+	"""
+	d1orig = d1
+	for d2 in d:
+		dn = {}
+		if isinstance(d2,(list,tuple)):
+			for k in d2:
+				try:
+					dn[k] = d1[k]
+				except KeyError:
+					pass # just ignore
+		else:
+			for k,v in d1.items():
+				if d2.get(k,Uncommon) == v:
+					dn[k]=v
+		d1 = dn
+	return d1
+
+def notcommon(d1,*d):
+	"""
+	Return a dict with only those keys/values in the first dict that are
+	different from (or not present in) the rest.
+
+	>>> common({1:2,3:4,5:6,7:8},{1:3,5:6,7:8,9:10})
+	{1:2}
+
+	"""
+	res = dict(d1)
+	for d2 in d:
+		if isinstance(d2,(list,tuple)):
+			for k in d2:
+				try:
+					del res[k]
+				except KeyError:
+					pass # just ignore
+		else:
+			for k,v in res.items():
+				if d2.get(k,Uncommon) == v:
+					del res[k]
+	return res
+
 
 def print_fkey_check(what=0):
 	global had_output
@@ -322,7 +450,7 @@ class Key(object):
 		self.fields=fields
 		self.id = (ktype,fields)
 
-	def pref(self,pref_seq=False):
+	def pref(self, pref_seq=False, pref_text=True):
 		"""Pref value for this key"""
 		pr=1000
 
@@ -339,12 +467,12 @@ class Key(object):
 			f = f[0]
 			if f.name in ("id","lfd"):
 				pr += 50
-			if f.tname == "int":
-				if pref_seq: # also prefer integer keys
-					pr += 100/len(self.fields)
+			if f.tname in INTs:
+				if not pref_text:
+					pr *= 5
 			else:
-				if not pref_seq:
-					pr += 100/len(self.fields)
+				if pref_text:
+					pr *= 5
 
 		if self.ktype!="U":
 			pr /= 10
@@ -499,7 +627,7 @@ class Table(object):
 		self.fkey={}
 		self.fknames={}
 		self.dupfkeys=[]
-		self.contents=[]
+		self.contents={}
 
 		if db:
 			db.tables[name]=self
@@ -510,8 +638,54 @@ class Table(object):
 
 		self.db = db
 
+	def get(self,d):
+		"""Retrieve a dataset that has the same key as d"""
+		for k in self.possible_keys(d):
+			if k in self.contents:
+				return self.contents[k]
+		return None
+
+	def pop(self,d):
+		"""Retrieve a dataset that has the same key as d, and delete it"""
+		for k in self.possible_keys(d):
+			if k in self.contents:
+				dd = self.contents[k]
+				for k in self.possible_keys(dd):
+					if k in self.contents:
+						del self.contents[k]
+				return dd
+		return None
+
 	def update(self, d):
-		self.contents.append(d)
+		#from pprint import pprint
+		"""Insert a (possibly incomplete) dataset into this table"""
+		#print "UPDATE",self.name,"";pprint(self.contents)
+		#print "WITH","",;pprint(d)
+		dd = None
+		for k in self.possible_keys(d):
+			if k in self.contents:
+				dd = self.contents[k]
+				dd.update(d)
+				break
+		if not dd:
+			# not found ⇒ add (a copy)
+			dd = dict(d)
+		for k in self.possible_keys(dd):
+			self.contents[k] = dd
+		#print "GETS","",;pprint(self.contents)
+	
+	def possible_keys(self, d):
+		"""Get all possible keys for a dataset"""
+		for bk in self.best_keys(False,True):
+			try:
+				yield tuple((bk,)+tuple( d[f[0].name] for f in bk.fields ))
+			except KeyError:
+				pass
+
+	def possible_key(self, d):
+		"""Return the best-possible key for a dataset"""
+		return self.possible_keys(d).next()
+
 
 	def clone(self,db):
 		t = Table(self.name)
@@ -539,10 +713,12 @@ class Table(object):
 		t.db = db
 		return t
 
-	def best_keys(self, pref_seq=True):
+	def best_keys(self, pref_seq=True, pref_text=True, only_unique = True):
 		"""Returns all indices on the table, sorted by preference."""
 		k=self.key.values()
-		k.sort(lambda a,b: b.pref(pref_seq)-a.pref(pref_seq))
+		if only_unique:
+			k = [x for x in k if x.ktype == 'U']
+		k.sort(lambda a,b: b.pref(pref_seq,pref_text)-a.pref(pref_seq,pref_text))
 		return k
 
 	def timestamp(self):
@@ -987,10 +1163,76 @@ class Schema:
 				yield "DROP TABLE `%s`" % (tn,)
 
 
-	def update(self, db1,db2, days=None, force=False,force_equal=False, tables=()):
+	def read_data(db,tables=()):
 		if not tables:
 			tables=self.tables.keys()
 			tables.sort()
+		for t in tables:
+			trace("reading data from "+t.name)
+			for d in db.DoSelect("select * from "+bq(t.name), _dict=1,_empty=1):
+				t.update(d)
+
+	def update2(self, days=None, force=False,force_equal=False, tables=()):
+		"""Generate data update statements if at least one source is not a database"""
+		# The problem here are incomplete update statements which skip
+		# auto-increment keys and default values. Therefore we'll need to
+		# read all data and find equivalent records using appropriate keys.
+
+		if not tables:
+			tables=self.tables.keys()
+			tables.sort()
+
+		for t in tables:
+			t1 = self.tables[t]
+			try:
+				t2 = self.old_tables[t]
+			except KeyError:
+				t2 = None
+			while True:
+				try:
+					k,v = t1.contents.popitem()
+				except KeyError:
+					break
+				else:
+					vv = t1.pop(v)
+					assert vv is None or vv is v,"%r %r" % (v,vv)
+					if t2 is None: w = None
+					else: w = t2.get(v)
+					if w is None:
+						s,k = print_insert(v)
+						yield (None,"insert into "+bq(t)+s,k)
+						continue
+					ww = t2.pop(w)
+					assert ww is None or ww is w,"%r %r" % (w,ww)
+					vxw = notcommon(v,w) # the values-to-be-written
+					if not vxw: # nothing to do
+						continue
+					vw = common(v,w) # candidate fields for the key
+					tk = t1.possible_key(vw) # actual key
+	
+					tk = tuple(( f[0].name for f in tk[0].fields ))
+					sk,skl = print_query(common(vw,tk)) # where clause
+					uk,ukl = print_update(vxw) # assignments
+					skl.update(ukl) # common dictionary
+					yield (None, "update "+bq(t)+" set "+uk+" where "+sk, skl)
+
+			if t2: # now process the remaining stuff
+				while True:
+					try:
+						k,v = t2.contents.popitem()
+					except KeyError:
+						break
+					else:
+						vv = t2.pop(v)
+						assert vv is None or vv is v,"%r %r" % (v,vv)
+						tk = t2.possible_key(v)
+						tk = tuple(( f[0].name for f in tk[0].fields ))
+						sk,skl = print_query(common(d,tk)) # where clause
+						yield (None, "delete from "+bq(t)+" where "+sk, skl)
+
+
+	def update(self, db1,db2, days=None, force=False,force_equal=False, tables=()):
+		"""Generate data update statements if both sources are databases"""
 
 
 		odb=Db(db1)
@@ -998,10 +1240,6 @@ class Schema:
 		ndb=Db(db2)
 		ndbq=Db(db2)
 
-		def bq(n):
-			"""Backquote?"""
-			return '`'+n+'`'
-			
 
 		def iseq(a,b):
 			if not a and not b: return 1
@@ -1031,60 +1269,6 @@ class Schema:
 					if na > nb: return 1
 			return 0
 
-
-		def print_select(fieldpos,ar,br=None):
-			res = ""
-			resl={}
-			if br: resl["_debug"]=_debug
-			for fd,idx in fieldpos.items():
-				if br:
-					if ar[idx] == br[idx]: continue
-				
-				if res: res += ", "
-				res += bq(fd)+"="
-				val = ar[idx]
-
-				if val is None:
-					res += "NULL"
-				else:
-					if not isinstance(val,array.array):
-						val=str(val)
-					res += '${%s_}' % (fd,)
-					resl[fd+'_']=val
-
-			return (res,resl)
-
-		def print_insert(fieldpos,ar,br=None):
-			res = ""
-			resg = ""
-			resl={"_debug":_debug}
-			for fd,idx in fieldpos.items():
-				if br:
-					if ar[idx] == br[idx]: continue
-				
-				if res:
-					res += ", "
-					resg += ", "
-				res += bq(fd)
-				try:
-					val = ar[idx]
-				except TypeError:
-					print ar
-					raise
-
-				if val is None:
-					resg += "NULL"
-				else:
-					if not isinstance(val,array.array):
-						#try: val=int(val)
-						#except OverflowError: val=float(val)
-						#except ValueError: pass
-						#except TypeError: val=str(val)
-						val=str(val)
-					resg += '${%s_}' % (fd,)
-					resl[fd+'_']=val
-
-			return ('(%s) VALUES (%s)' % (res,resg),resl)
 
 		def key(ts_field,ts_field_pos,ar,br,fieldpos,fld):
 			res = ""
@@ -1123,25 +1307,25 @@ class Schema:
 			return (res,resl)
 
 
-		def next_row(dbg,table,db):
+		def next_row(dbg,table,query):
+			try: res = query.next()
+			except StopIteration: return None
+
+			# tracing: print message once per second or when the table name changes
 			global cnt
 			global cntt
 			global ltm
 
-			try: fl = db.next()
-			except StopIteration: return None
-
-			ntm=int(time.time())
+			ntm=time.time()
 			if cntt != table:
 				ltm=ntm-1
 				cntt=table
-
-			if ntm != ltm:
-				trace(cnt,dbg,table.name,"|".join(map(str,fl)))
+			if ntm-1 >= ltm:
+				trace(cnt,dbg,table.name,"|".join(map(str,res)))
 				ltm=ntm
-
 			cnt += 1
-			return fl
+
+			return res
 
 
 		def load(fl,dbg,table,db,f,fk):
@@ -1257,8 +1441,8 @@ class Schema:
 				ost = odbq.DoSelect("select "+ts_sel+"1 from "+table.name, _store=0,_empty=1)
 				nst = ndbq.DoSelect("select "+ts_sel+"2 from "+table.name, _store=0,_empty=1)
 
-			index_a = next_row(1,table,ost)
-			index_b = next_row(2,table,nst)
+			index_a = next_row("src",table,ost)
+			index_b = next_row("dst",table,nst)
 
 			while index_a or index_b:
 				if ts_field and index_a:
@@ -1287,13 +1471,13 @@ class Schema:
 					else: dfa=dxa
 					if row_diff<0: dfb=dxa
 					else: dfb=dxb
-					xa = load(dfa, 1,table,odb,keys,fld)
-					xb = load(dfb, 2,table,ndb,keys,fld)
+					xa = load(dfa, "src",table,odb,keys,fld)
+					xb = load(dfb, "dst",table,ndb,keys,fld)
 
 					if xa and xb: # both tables have data
 						if ts_field:
 							try:
-								idc=xa[ts_field_pos]>xb[ts_field_pos]
+								idc= (xa[ts_field_pos] > xb[ts_field_pos])
 							except TypeError:
 								idc= (xb[ts_field_pos] is None and xa[ts_field_pos] is not None)
 						else:
@@ -1301,7 +1485,7 @@ class Schema:
 						if row_diff or idc or not iseq(xa,xb):
 							if force or idc:
 								wk,wkl = key(ts_field,ts_field_pos,xa,xb,fieldpos,keys)
-								pn,pnl = print_select(fieldpos,xa,xb)
+								pn,pnl = print_update(posval2dict(fieldpos,xa,xb))
 								if pn:
 									pnl.update(wkl)
 									if keys:
@@ -1310,11 +1494,11 @@ class Schema:
 										yield out(ndb,"update %s set %s" % (bq(table.name),pn),**pnl)
 					elif row_diff < 0: # alt => einfügen
 						if xa:
-							pn,pnl = print_insert(fieldpos,xa)
+							pn,pnl = print_insert(posval2dict(fieldpos,xa))
 							if pn: yield out(ndb, "replace into %s %s" % (bq(table.name),pn),**pnl)
 					elif xb: # neu => raus
 						wk,wkl = key(ts_field,ts_field_pos,xb,None,fieldpos,keys)
-						pn,pnl = print_select(fieldpos,xb)
+						pn,pnl = print_update(posval2dict(fieldpos,xb))
 						pnl.update(wkl)
 						if keys:
 							yield out(ndb, "delete from %s where %s" % (bq(table.name),wk),**pnl)
@@ -1323,8 +1507,8 @@ class Schema:
 					else: # kein 'xb' : ???
 						print >>sys.stderr, "XB leer",ts_field,ts_field_pos,fieldpos,keys
 				if keys:
-					if row_diff <= 0: index_a = next_row(1,table,ost)
-					if row_diff >= 0: index_b = next_row(2,table,nst)
+					if row_diff <= 0: index_a = next_row("src",table,ost)
+					if row_diff >= 0: index_b = next_row("dst",table,nst)
 				else:
 					index_a=None
 					index_b=None
@@ -1411,10 +1595,6 @@ def main():
 	verbose=opts.verbose
 	if verbose>1:
 		_debug=sys.stderr
-
-	if opts.update and (not opts.db1 or not opts.db2):
-		print >>sys.stderr,parser.format_help()
-		sys.exit(1)
 
 	if opts.db1 or opts.db2 or opts.update:
 		global Db,NoData
@@ -1556,7 +1736,16 @@ def main():
 		rem=0
 		com=0
 
-		for d,t,tx in db1.update(opts.db1,opts.db2, days=opts.days, force=opts.force,force_equal=opts.force_equal, tables=args):
+		if not opts.db1file and not opts.db2file:
+			# read from database
+			updo = db1.update(opts.db1,opts.db2, days=opts.days, force=opts.force,force_equal=opts.force_equal, tables=args)
+		else:
+			# analyze actual table dumps
+			if not opts.db1file: db1.read_data(tables=args)
+			if not opts.db2file: db2.read_data(tables=args)
+			updo = db1.update2(days=opts.days, force=opts.force,force_equal=opts.force_equal, tables=args)
+			
+		for d,t,tx in updo:
 			if t is None: continue
 			exitcode=2
 
@@ -1572,6 +1761,11 @@ def main():
 					updl.append((d,t,tx))
 				if d not in updb:
 					updb.append(d)
+			else:
+				def _prep(name):
+					return sqlquote(tx[name.group(1)])
+				t = re.sub(r"\$\{([a-zA-Z][a-zA-Z_0-9]*)\}",_prep,t)
+				print t,";"
 		for d,t,tx in updl:
 			if verbose:
 				com += 1
