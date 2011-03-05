@@ -413,7 +413,10 @@ class Db(object):
 		if cb:
 			n = 0
 			for x in self._DoSelect(_cmd, **kv):
-				cb(x)
+				if kv.get('_dict',0):
+					cb(**x)
+				else:
+					cb(*x)
 				n += 1
 			return n
 		else:
