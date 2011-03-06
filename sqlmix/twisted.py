@@ -41,6 +41,7 @@ from time import time,sleep
 import string
 import re
 import sys
+from traceback import print_exc
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.python.failure import Failure
@@ -58,7 +59,10 @@ def debug(*a):
 		if isinstance(x,(tuple,list)):
 			return "\n".join((pr(y).strip("\n") for y in x))
 		elif isinstance(x,(basestring,int)):
-			return unicode(x)
+			try:
+				return unicode(x)
+			except:
+				return repr(x)
 		else:
 			return repr(x)
 	s=" ".join((pr(x) for x in a))
@@ -79,22 +83,64 @@ class DbPool(object):
 	TODO: shrink the pool.
 	TODO: issue periodic keepalive requests.
 	"""
+	timeout = 10
+
 	def __init__(self,*a,**k):
 		"""\
 		Create a pool of database connections, for processing (a sequence of)
 		SQL commands in the background.
 		"""
+		k['_single_thread'] = True
+
 		self.db = []
 		self.args = a
 		self.kwargs = k
 		self.lock = Lock()
+		self.cleaner = None
+
+		reactor.addSystemEventTrigger('before', 'shutdown', self.close)
 
 	def _get_db(self):
 		if self.db:
-			return self.db.pop(0)
-		return sqlmix.Db(*self.args,**self.kwargs)
+			r = self.db.pop(0)[0]
+			debug("OLD",r.tid)
+		else:
+			r = _DbThread(self)
+			debug("NEW",r.tid)
+		return r
+
 	def _put_db(self,db):
-		self.db.append(db)
+		try:
+			t = time()+self.timeout
+			self.db.append((db,t))
+			if self.cleaner is None:
+				self.cleaner = reactor.callLater(self.timeout,self._clean)
+		except Exception:
+			print_exc()
+		else:
+			debug("BACK",db.tid)
+	
+	def _clean(self):
+		self.cleaner = None
+		t = time()
+		while self.db and self.db[0][1] <= t:
+			db = self.db.pop(0)[0]
+			db.close()
+		if self.db:
+			self.cleaner = reactor.callLater(self.db[0][1]-t,self._clean)
+	def __del__(self):
+		if self.cleaner:
+			reactor.cancelCallLater(self.cleaner)
+			self.cleaner = None
+		while self.db:
+			db = self.db.pop(0)[0]
+			db.close()
+
+	def close(self):
+		while self.db:
+			db = self.db.pop(0)[0]
+			db.close()
+		
 	def __call__(self):
 		"""\
 		Get a new connection from the database pool (or start a new one)
@@ -117,22 +163,22 @@ class DbPool(object):
 		to use the database conection more than once. Otherwise, control
 		will have left the "with" block and the connection will be dead.
 		"""
-		r = _DbThread(self)
-		debug("NEW",id(r))
-		return r
+		return self._get_db()
 
+tid = 0
 class _DbThread(object):
 	def __init__(self,parent):
+		global tid
+		tid += 1
+		self.tid = tid
 		self.parent = parent
 		self.q = Queue()
-		debug("INIT",id(self),id(self.q))
+		debug("INIT",self.tid)
 		self.done = deferToThread(self.run,self.q)
+		self.started = False
 
 		self.committed = []
 		self.rolledback = []
-		self.done.addCallback(self._run_committed)
-		self.done.addErrback(self._run_rolledback)
-		self.done.addErrback(_print_error)
 
 	def __enter__(self):
 		return self
@@ -152,74 +198,103 @@ class _DbThread(object):
 			for proc,a,k in self.committed[::-1]:
 				debug("AFTER COMMIT",proc,a,k)
 				proc(*a,**k)
+		except Exception:
+			print_exc()
 		finally:
-			self.committed = ()
-		self.rolledback = ()
+			self.committed = []
+		self.rolledback = []
 		return r
 	def _run_rolledback(self,r):
-		self.committed = ()
+		self.committed = []
 		try:
 			for proc,a,k in self.rolledback[::-1]:
 				debug("AFTER ROLLBACK",proc,a,k)
 				proc(*a,**k)
+		except Exception:
+			print_exc()
 		finally:
-			self.rolledback = ()
+			debug("AFTER ALL ROLLBACK",r)
+			self.rolledback = []
 		return r
 
 	def run(self,q):
-		db = self.parent._get_db()
-		debug("START",id(q))
+		try:
+			db = sqlmix.Db(*self.parent.args,**self.parent.kwargs)
+		except Exception:
+			"""No go. Return that error on every call."""
+			f = Failure()
+			while True:
+				d,proc,a,k = q.get()
+				if not d: break
+				d.errback(f)
+			return
+		debug("START",self.tid)
 		res = None
-		while True:
+		d = True
+		while d:
 			d = None
+			sent = False
 			try:
 				d,proc,a,k = q.get()
 				res = None
-				debug("DO",id(q),proc,a,k)
+				debug("DO",self.tid,proc,a,k)
 				if proc == "COMMIT":
-					debug("COMMIT",a,k)
-					res = k.get('res',None)
 					db.commit()
-					break
 				elif proc == "ROLLBACK":
-					debug("ROLLBACK",a,k)
-					res = k.get('res',None)
 					db.rollback()
-					break
-				res = getattr(db,proc)(*a,**k)
-			except BaseException as e:
-				if d:
-					debug("EB",id(q),d,res)
-					reactor.callFromThread(d.errback,Failure())
-					d = None
 				else:
+					r = getattr(db,proc)
+					debug("CALL",self.tid,r)
+					res = r(*a,**k)
+					debug("CALLED",self.tid,res)
+			except BaseException as e:
+				res = Failure()
+				if d:
+					debug("EB",self.tid,d,res)
+					reactor.callFromThread(d.errback,res)
+					sent = True
+				else:
+					debug("ERR",self.tid,res)
 					raise
 			finally:
-				if d:
-					debug("CB",id(q),d,res)
+				if d and not sent:
+					debug("CB",self.tid,d,res)
 					reactor.callFromThread(d.callback,res)
-				debug("DID",id(q),res)
-		self.parent._put_db(db)
-		debug("STOP",id(q))
-		return res
+				debug("DID",self.tid,proc)
+		db.close()
+		debug("STOP",self.tid)
+		return
 
-	def __del__(self):
+	def close(self):
 		if self.q is None:
+			debug("DEAD 2",self.tid)
 			return
-		self.q.put((None,"COMMIT",[],{}))
-		debug("DEAD",id(self),id(self.q),a)
+		self.q.put((None,"ROLLBACK",[],{}))
+		debug("DEAD",self.tid)
 		self.q = None
+	__del__ = close
 
 	def commit(self,res=None):
-		debug("CALL COMMIT",id(self),id(self.q),res)
-		self.q.put((None,"COMMIT",[],{'res':res}))
-		self.q = None
-		return self.done
+		d = Deferred()
+		debug("CALL COMMIT",self.tid,d,res)
+		self.q.put((d,"COMMIT",[],{'res':res}))
+		d.addCallback(self._run_committed)
+		d.addErrback(self._run_rolledback)
+		d.addBoth(self._done)
+		return d
+
 	def rollback(self,res=None):
-		debug("CALL ROLLBACK",id(self),id(self.q),res)
-		self.q.put((None,"ROLLBACK",[],{'res':res}))
-		self.q = None
-		return self.done
+		d = Deferred()
+		debug("CALL ROLLBACK",self.tid,d,res)
+		self.q.put((d,"ROLLBACK",[],{'res':res}))
+		d.addBoth(self._run_rolledback)
+		d.addBoth(self._done)
+		return d
+
+	def _done(self,r):
+		self.parent._put_db(self)
+		return r
+
 
 	def call_committed(self,proc,*a,**k):
 		self.committed.append((proc,a,k))
@@ -229,10 +304,10 @@ class _DbThread(object):
 	def _do(self,job,*a,**k):
 		"""Wrapper for calling the background thread."""
 		d = Deferred()
-		debug("QUEUE",id(self.q),job,a,k)
+		debug("QUEUE",self.tid,job,a,k)
 		self.q.put((d,job,a,k))
 		def _log(r):
-			debug("BACK",id(self.q),r)
+			debug("BACK",self.tid,r)
 			return r
 		d.addBoth(_log)
 		return d
