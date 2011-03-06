@@ -37,6 +37,13 @@ import re
 from sys import exc_info
 from threading import local
 
+class FakeLocal(object):
+	"""\
+		This connection is only used by one thread,
+		so don't bother with thread-local variables.
+		"""
+	pass
+
 __all__ = ["Db","NoData","ManyData"]
 
 def fixup_error(cmd):
@@ -203,7 +210,10 @@ class Db(object):
 		self.DB = _databases[dbtype](**kwargs)
 		self.DB.dbtype=dbtype
 
-		self._c = local()
+		if kwargs.get("_single_thread",False):
+			self._c = FakeLocal()
+		else:
+			self._c = local()
 		self._c.conn=None
 		self._trace=None
 
@@ -247,6 +257,16 @@ class Db(object):
 			self._c.conn = r
 		#r.cursor(*self.CArgs).execute('BEGIN')
 		return self._c.conn
+
+	def close(self):
+		"""\
+		Close the current connection, if any.
+		"""
+		self.rollback()
+
+		c = self._conn(skip=True)
+		if c:
+			c.close()
 
 	def commit(self):
 		"""\
@@ -340,7 +360,7 @@ class Db(object):
 
 		_cmd = self.prep(_cmd, **kv)
 		try:
-			apply(curs.execute, _cmd)
+			curs.execute(*_cmd)
 		except:
 			fixup_error(_cmd)
 			raise
@@ -369,7 +389,7 @@ class Db(object):
 
 		_cmd = self.prep(_cmd, **kv)
 		try:
-			apply(curs.execute, _cmd)
+			curs.execute(*_cmd)
 		except:
 			fixup_error(_cmd)
 			raise
@@ -437,7 +457,7 @@ class Db(object):
 
 		_cmd = self.prep(_cmd, **kv)
 		try:
-			apply(curs.execute, _cmd)
+			curs.execute(*_cmd)
 		except:
 			fixup_error(_cmd)
 			raise
