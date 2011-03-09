@@ -48,7 +48,10 @@ from twisted.python.failure import Failure
 from twisted.internet.threads import deferToThread
 from threading import Lock
 from Queue import Queue
-__all__ = ["DbPool"]
+
+__all__ = ('DbPool','NoData')
+
+NoData = sqlmix.NoData
 
 def _print_error(f):
 	f.printTraceback(file=sys.stderr)
