@@ -243,8 +243,10 @@ class _DbThread(object):
 				debug("DO",self.tid,proc,a,k)
 				if proc == "COMMIT":
 					db.commit()
+					res = k.get('res',None)
 				elif proc == "ROLLBACK":
 					db.rollback()
+					res = k.get('res',None)
 				else:
 					r = getattr(db,proc)
 					debug("CALL",self.tid,r)
