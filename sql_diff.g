@@ -540,13 +540,11 @@ class FKey(object):
 		"""Dump myself, either completely or as a diff to key 'ok'"""
 		if not in_create:
 			if not ok:
-				r="ADD"
+				r = "ADD"
 			elif not self._diffs(ok,skip_flags=skip_flags):
 				return None
 			else:
-				r=""
-				r += "DROP CONSTRAINT `%s`,\n    " % (ok.name,)
-				r += "ADD"
+				r = "ADD"
 
 		else:
 			r=""
