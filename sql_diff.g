@@ -197,10 +197,6 @@ def print_fkey_check(what=0):
 		print "SET FOREIGN_KEY_CHECKS = ",what,";"
 
 class curtime: pass
-class true:
-	def __str__(self): return "true"
-class false:
-	def __str__(self): return "false"
 class NotGiven: pass
 
 def valprint(x):
@@ -248,6 +244,9 @@ class Field(object):
 
 	def create_done(self):
 		"""Fill in some defaults"""
+		if self.tname == 'bool': # mysql specific
+			self.tname = 'tinyint'
+			self.len = 1
 		if self.defval is NotGiven:
 			if self.autoinc or self.nullable:
 				self.defval = None
@@ -258,7 +257,9 @@ class Field(object):
 			else:
 				self.defval = ""
 		if self.len is None:
-			if self.tname == "tinyint":
+			if self.tname == "char":
+				self.len = 1
+			elif self.tname == "tinyint":
 				self.len = 4
 			elif self.tname == "smallint":
 				self.len = 6
@@ -1999,8 +2000,8 @@ parser SQL:
 	rule nval: NULL {{ return None }}
 			| val {{ return val }}
 
-	rule tval: TRUE {{ return true }}
-			| FALSE {{ return false }}
+	rule tval: TRUE {{ return '1' }}
+			| FALSE {{ return '0' }}
 
 	rule ntval: NULL {{ return None }}
 			| CURRENT_TIMESTAMP {{ return curtime }}
