@@ -163,7 +163,7 @@ class DbPool(object):
 		rolled back.
 
 		Note that you must use the @inlineCallbacks method if you want
-		to use the database conection more than once. Otherwise, control
+		to use the database connection more than once. Otherwise, control
 		will have left the "with" block and the connection will be dead.
 		"""
 		return self._get_db()
