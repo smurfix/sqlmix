@@ -223,13 +223,13 @@ class _DbThread(object):
 	def run(self,q):
 		try:
 			db = sqlmix.Db(*self.parent.args,**self.parent.kwargs)
-		except Exception:
+		except BaseException:
 			"""No go. Return that error on every call."""
 			f = Failure()
 			while True:
 				d,proc,a,k = q.get()
 				if not d: break
-				d.errback(f)
+				reactor.callFromThread(d.errback,f)
 			return
 		debug("START",self.tid)
 		res = None
