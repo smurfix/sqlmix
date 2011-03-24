@@ -42,8 +42,11 @@ import string
 import re
 import sys
 from traceback import print_exc
+from zope.interface import implements
+from twisted.application import service
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred,DeferredList,maybeDeferred
+from twisted.python import log
 from twisted.python.failure import Failure
 from twisted.internet.threads import deferToThread
 from threading import Lock
@@ -79,7 +82,7 @@ class CommitThread(Exception):
 		"""
 	pass
 
-class DbPool(object):
+class DbPool(object,service.Service):
 	"""\
 	Manage a pool of database connections.
 
@@ -87,6 +90,7 @@ class DbPool(object):
 	TODO: issue periodic keepalive requests.
 	"""
 	timeout = 10
+	implements(service.IService)
 
 	def __init__(self,*a,**k):
 		"""\
@@ -101,8 +105,6 @@ class DbPool(object):
 		self.lock = Lock()
 		self.cleaner = None
 
-		reactor.addSystemEventTrigger('before', 'shutdown', self.close)
-
 	def _get_db(self):
 		if self.db:
 			r = self.db.pop(0)[0]
@@ -113,6 +115,9 @@ class DbPool(object):
 		return r
 
 	def _put_db(self,db):
+		if self.db is None:
+			db.close()
+			return db.done
 		try:
 			t = time()+self.timeout
 			self.db.append((db,t))
@@ -139,10 +144,16 @@ class DbPool(object):
 			db = self.db.pop(0)[0]
 			db.close()
 
-	def close(self):
-		while self.db:
-			db = self.db.pop(0)[0]
+	def stopService(self):
+		super(DbPool,self).stopService()
+		dbl = self.db
+		self.db = None
+		dl = []
+		for db in dbl:
+			db = db[0]
 			db.close()
+			dl.append(db.done)
+		return DeferredList(dl)
 		
 	def __call__(self):
 		"""\
@@ -189,11 +200,12 @@ class _DbThread(object):
 		if self.q is None:
 			return False
 		if b is None or isinstance(b,CommitThread):
-			self.commit()
+			d = self.commit()
 		else:
 			from traceback import format_exception
 			debug("EXIT ON ERROR",format_exception(a,b,c))
-			self.rollback()
+			d = self.rollback()
+		d.addErrback(log.err)
 		return False
 
 	def _run_committed(self,r):
@@ -297,8 +309,9 @@ class _DbThread(object):
 		return d
 
 	def _done(self,r):
-		self.parent._put_db(self)
-		return r
+		d = maybeDeferred(self.parent._put_db,self)
+		d.addCallbacks(lambda _: r, lambda _: _)
+		return d
 
 
 	def call_committed(self,proc,*a,**k):

@@ -1,3 +1,9 @@
+python-sqlmix (0.9.4-1) maverick; urgency=low
+
+  * Twisted: convert the database pool to a Service.
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Thu, 24 Mar 2011 14:55:48 +0100
+
 python-sqlmix (0.9.3-1) unstable; urgency=low
 
   * Fixed changing a foreign key
