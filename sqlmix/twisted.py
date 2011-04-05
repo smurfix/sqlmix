@@ -56,6 +56,13 @@ __all__ = ('DbPool','NoData')
 
 NoData = sqlmix.NoData
 
+def tname():
+	import threading
+	try:
+		return threading._active[threading._get_ident()].name
+	except KeyError:
+		return "???"
+
 def _print_error(f):
 	f.printTraceback(file=sys.stderr)
 
@@ -104,6 +111,8 @@ class DbPool(object,service.Service):
 		self.kwargs = k
 		self.lock = Lock()
 		self.cleaner = None
+		self._tb = {}
+		reactor.addSystemEventTrigger('before', 'shutdown', self._dump)
 
 	def _get_db(self):
 		if self.db:
@@ -179,6 +188,16 @@ class DbPool(object,service.Service):
 		"""
 		return self._get_db()
 
+	def _note(self,x):
+		import traceback
+		self._tb[x.tid] = traceback.format_stack()
+	def _denote(self,x):
+		del self._tb[x.tid]
+	def _dump(self):
+		for a,b in self._tb:
+			print >>sys.stderr,"Stack",a
+			print >>sys.stderr,b
+
 tid = 0
 class _DbThread(object):
 	def __init__(self,parent):
@@ -195,8 +214,10 @@ class _DbThread(object):
 		self.rolledback = []
 
 	def __enter__(self):
+		self.parent._note(self)
 		return self
 	def __exit__(self, a,b,c):
+		self.parent._denote(self)
 		if self.q is None:
 			return False
 		if b is None or isinstance(b,CommitThread):
@@ -243,7 +264,7 @@ class _DbThread(object):
 				if not d: break
 				reactor.callFromThread(d.errback,f)
 			return
-		debug("START",self.tid)
+		debug("START",self.tid, tname())
 		res = None
 		d = True
 		while d:
