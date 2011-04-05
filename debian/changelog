@@ -1,4 +1,10 @@
-python-sqlmix (0.9.4-1) maverick; urgency=low
+python-sqlmix (0.9.5-1) unstable; urgency=low
+
+  * Add some debugging help; looks good for now
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Tue, 05 Apr 2011 15:41:23 +0200
+
+python-sqlmix (0.9.4-1) unstable; urgency=low
 
   * Twisted: convert the database pool to a Service.
 
