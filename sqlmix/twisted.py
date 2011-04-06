@@ -194,7 +194,7 @@ class DbPool(object,service.Service):
 	def _denote(self,x):
 		del self._tb[x.tid]
 	def _dump(self):
-		for a,b in self._tb:
+		for a,b in self._tb.items():
 			print >>sys.stderr,"Stack",a
 			print >>sys.stderr,b
 

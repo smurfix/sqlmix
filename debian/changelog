@@ -1,3 +1,9 @@
+python-sqlmix (0.9.6-1) unstable; urgency=low
+
+  * Error in debug code. Duh.
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Wed, 06 Apr 2011 23:02:30 +0200
+
 python-sqlmix (0.9.5-1) unstable; urgency=low
 
   * Add some debugging help; looks good for now
