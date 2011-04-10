@@ -48,7 +48,8 @@ from twisted.internet import reactor
 from twisted.internet.defer import Deferred,DeferredList,maybeDeferred
 from twisted.python import log
 from twisted.python.failure import Failure
-from twisted.internet.threads import deferToThread
+from twisted.python.threadpool import ThreadPool
+from twisted.internet.threads import deferToThreadPool
 from threading import Lock
 from Queue import Queue
 
@@ -112,7 +113,10 @@ class DbPool(object,service.Service):
 		self.lock = Lock()
 		self.cleaner = None
 		self._tb = {}
+		self.threads = ThreadPool(minthreads=2, maxthreads=10, name="Database")
+		self.threads.start()
 		reactor.addSystemEventTrigger('before', 'shutdown', self._dump)
+		reactor.addSystemEventTrigger('after', 'shutdown', self.threads.stop)
 
 	def _get_db(self):
 		if self.db:
@@ -207,7 +211,7 @@ class _DbThread(object):
 		self.parent = parent
 		self.q = Queue()
 		debug("INIT",self.tid)
-		self.done = deferToThread(self.run,self.q)
+		self.done = deferToThreadPool(reactor, self.parent.threads, self.run,self.q)
 		self.started = False
 
 		self.committed = []

@@ -1,3 +1,9 @@
+python-sqlmix (0.9.7-1) unstable; urgency=low
+
+  * Create a separate thread pool for Twisted database connections.
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Sun, 10 Apr 2011 09:34:24 +0200
+
 python-sqlmix (0.9.6-1) unstable; urgency=low
 
   * Error in debug code. Duh.
