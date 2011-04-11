@@ -1,8 +1,9 @@
 python-sqlmix (0.9.7-1) unstable; urgency=low
 
   * Create a separate thread pool for Twisted database connections.
+  * Allow for callback style database access, in order to support retrying.
 
- -- Matthias Urlichs <smurf@smurf.noris.de>  Sun, 10 Apr 2011 09:34:24 +0200
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Mon, 11 Apr 2011 10:39:26 +0200
 
 python-sqlmix (0.9.6-1) unstable; urgency=low
 

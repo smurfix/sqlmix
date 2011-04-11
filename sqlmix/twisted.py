@@ -45,7 +45,7 @@ from traceback import print_exc
 from zope.interface import implements
 from twisted.application import service
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred,DeferredList,maybeDeferred
+from twisted.internet.defer import Deferred,DeferredList,maybeDeferred,inlineCallbacks,returnValue
 from twisted.python import log
 from twisted.python.failure import Failure
 from twisted.python.threadpool import ThreadPool
@@ -129,8 +129,13 @@ class DbPool(object,service.Service):
 
 	def _put_db(self,db):
 		if self.db is None:
-			db.close()
+			db.close("Shutdown")
 			return db.done
+		if db.q is None:
+			raise RuntimeError("Queueing closed DB handle")
+		for d in self.db:
+			if db is d[0]:
+				raise RuntimeError("DoubleQueued")
 		try:
 			t = time()+self.timeout
 			self.db.append((db,t))
@@ -146,7 +151,7 @@ class DbPool(object,service.Service):
 		t = time()
 		while self.db and self.db[0][1] <= t:
 			db = self.db.pop(0)[0]
-			db.close()
+			db.close("Timeout")
 		if self.db:
 			self.cleaner = reactor.callLater(self.db[0][1]-t,self._clean)
 	def __del__(self):
@@ -155,7 +160,7 @@ class DbPool(object,service.Service):
 			self.cleaner = None
 		while self.db:
 			db = self.db.pop(0)[0]
-			db.close()
+			db.close("Nonref Parent")
 
 	def stopService(self):
 		super(DbPool,self).stopService()
@@ -164,11 +169,11 @@ class DbPool(object,service.Service):
 		dl = []
 		for db in dbl:
 			db = db[0]
-			db.close()
+			db.close("Shutdown Service")
 			dl.append(db.done)
 		return DeferredList(dl)
 		
-	def __call__(self):
+	def __call__(self, job=None,retry=0):
 		"""\
 		Get a new connection from the database pool (or start a new one)
 		and return a thread handler.
@@ -190,17 +195,42 @@ class DbPool(object,service.Service):
 		to use the database connection more than once. Otherwise, control
 		will have left the "with" block and the connection will be dead.
 		"""
-		return self._get_db()
+		if not job:
+			return self._get_db()
+		return self._call(job,retry)
+
+	@inlineCallbacks
+	def _call(self, job, retry):
+		while True:
+			db = self._get_db()
+			try:
+				res = job(db)
+				res = yield res
+			except EnvironmentError:
+				raise
+			except Exception:
+				e1,e2,e3 = sys.exc_info()
+				yield db.rollback()
+				if retry:
+					retry -= 1
+					continue
+				raise e1,e2,e3
+			else:
+				yield db.commit()
+				returnValue( res )
 
 	def _note(self,x):
-		import traceback
-		self._tb[x.tid] = traceback.format_stack()
+		try:
+			raise Exception
+		except Exception:
+			self._tb[x.tid] = sys.exc_info()
 	def _denote(self,x):
 		del self._tb[x.tid]
 	def _dump(self):
+		import traceback
 		for a,b in self._tb.items():
 			print >>sys.stderr,"Stack",a
-			print >>sys.stderr,b
+			print >>sys.stderr,"".join(traceback.format_exception(*b))
 
 tid = 0
 class _DbThread(object):
@@ -307,12 +337,12 @@ class _DbThread(object):
 		debug("STOP",self.tid)
 		return
 
-	def close(self):
+	def close(self,reason="???"):
 		if self.q is None:
-			debug("DEAD 2",self.tid)
+			debug("DEAD 2",self.tid,reason)
 			return
 		self.q.put((None,"ROLLBACK",[],{}))
-		debug("DEAD",self.tid)
+		debug("DEAD",self.tid,reason)
 		self.q = None
 	__del__ = close
 
@@ -327,6 +357,9 @@ class _DbThread(object):
 
 	def rollback(self,res=None):
 		d = Deferred()
+		if self.q is None:
+			d.callback(res)
+			return d
 		debug("CALL ROLLBACK",self.tid,d,res)
 		self.q.put((d,"ROLLBACK",[],{'res':res}))
 		d.addBoth(self._run_rolledback)
