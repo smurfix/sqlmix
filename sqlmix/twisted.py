@@ -207,7 +207,9 @@ class DbPool(object,service.Service):
 				res = job(db)
 				res = yield res
 			except EnvironmentError:
-				raise
+				e1,e2,e3 = sys.exc_info()
+				yield db.rollback()
+				raise e1,e2,e3
 			except Exception:
 				e1,e2,e3 = sys.exc_info()
 				yield db.rollback()
@@ -383,7 +385,7 @@ class _DbThread(object):
 		debug("QUEUE",self.tid,job,a,k)
 		self.q.put((d,job,a,k))
 		def _log(r):
-			debug("BACK",self.tid,r)
+			debug("DEQUEUE",self.tid,r)
 			return r
 		d.addBoth(_log)
 		return d
