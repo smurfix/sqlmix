@@ -207,7 +207,7 @@ class DbPool(object,service.Service):
 			try:
 				res = job(db)
 				res = yield res
-			except EnvironmentError:
+			except (EnvironmentError,NameError):
 				e1,e2,e3 = sys.exc_info()
 				yield db.rollback()
 				raise e1,e2,e3
