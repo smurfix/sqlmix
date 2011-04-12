@@ -136,6 +136,7 @@ class DbPool(object,service.Service):
 		for d in self.db:
 			if db is d[0]:
 				raise RuntimeError("DoubleQueued")
+		db.count = 0
 		try:
 			t = time()+self.timeout
 			self.db.append((db,t))
@@ -245,6 +246,7 @@ class _DbThread(object):
 		debug("INIT",self.tid)
 		self.done = deferToThreadPool(reactor, self.parent.threads, self.run,self.q)
 		self.started = False
+		self.count = 0
 
 		self.committed = []
 		self.rolledback = []
@@ -350,8 +352,12 @@ class _DbThread(object):
 
 	def commit(self,res=None):
 		d = Deferred()
-		debug("CALL COMMIT",self.tid,d,res)
-		self.q.put((d,"COMMIT",[],{'res':res}))
+		if self.count:
+			debug("CALL COMMIT",self.tid,d,res)
+			self.q.put((d,"COMMIT",[],{'res':res}))
+		else:
+			debug("NO CALL COMMIT",self.tid,d,res)
+			d.callback(res)
 		d.addCallback(self._run_committed)
 		d.addErrback(self._run_rolledback)
 		d.addBoth(self._done)
@@ -362,8 +368,12 @@ class _DbThread(object):
 		if self.q is None:
 			d.callback(res)
 			return d
-		debug("CALL ROLLBACK",self.tid,d,res)
-		self.q.put((d,"ROLLBACK",[],{'res':res}))
+		if self.count:
+			debug("CALL ROLLBACK",self.tid,d,res)
+			self.q.put((d,"ROLLBACK",[],{'res':res}))
+		else:
+			debug("NO CALL ROLLBACK",self.tid,d,res)
+			d.callback(res)
 		d.addBoth(self._run_rolledback)
 		d.addBoth(self._done)
 		return d
@@ -381,6 +391,7 @@ class _DbThread(object):
 
 	def _do(self,job,*a,**k):
 		"""Wrapper for calling the background thread."""
+		self.count += 1
 		d = Deferred()
 		debug("QUEUE",self.tid,job,a,k)
 		self.q.put((d,job,a,k))
