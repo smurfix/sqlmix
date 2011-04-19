@@ -49,7 +49,7 @@ from twisted.internet.defer import Deferred,DeferredList,maybeDeferred,inlineCal
 from twisted.python import log
 from twisted.python.failure import Failure
 from twisted.python.threadpool import ThreadPool
-from twisted.internet.threads import deferToThreadPool
+from twisted.internet import threads
 from threading import Lock
 from Queue import Queue
 
@@ -263,7 +263,7 @@ class _DbThread(object):
 		self.parent = parent
 		self.q = Queue()
 		debug("INIT",self.tid)
-		self.done = deferToThreadPool(reactor, self.parent.threads, self.run,self.q)
+		self.done = threads.deferToThreadPool(reactor, self.parent.threads, self.run,self.q)
 		self.started = False
 		self.count = 0
 
