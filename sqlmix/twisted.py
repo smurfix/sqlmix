@@ -216,7 +216,7 @@ class DbPool(object,service.Service):
 
 	@inlineCallbacks
 	def _call(self, job, retry):
-		e1 is None
+		e1 = None
 		while True:
 			db = self._get_db()
 			self._note(db)
