@@ -55,6 +55,8 @@ from Queue import Queue
 
 __all__ = ('DbPool','NoData')
 
+_DEBUG = False
+
 NoData = sqlmix.NoData
 
 def tname():
@@ -67,8 +69,8 @@ def tname():
 def _print_error(f):
 	f.printTraceback(file=sys.stderr)
 
-def debug(*a):
-	return
+def debug_(flag,*a):
+	if not flag: return
 	def pr(x):
 		if isinstance(x,(tuple,list)):
 			return "\n".join((pr(y).strip("\n") for y in x))
@@ -81,6 +83,8 @@ def debug(*a):
 			return repr(x)
 	s=" ".join((pr(x) for x in a))
 	sys.stderr.write(s+"\n")
+def debug(*a):
+	debug_(_DEBUG,*a)
 
 class CommitThread(Exception):
 	u"""\
@@ -193,8 +197,17 @@ class DbPool(object,service.Service):
 		rolled back.
 
 		Note that you must use the @inlineCallbacks method if you want
-		to use the database connection more than once. Otherwise, control
+		to use the database connection within the block. Otherwise, control
 		will have left the "with" block and the connection will be dead.
+
+		Alternately, you can pass a procedure and an optional repeat count:
+		>>> def proc(db):
+		>>>     d = db.Do("...")
+		>>>     return d
+		>>> d = dbpool(proc, 10)
+
+		The procedure will be called up to 10 times.
+
 		"""
 		if not job:
 			return self._get_db()
@@ -204,21 +217,24 @@ class DbPool(object,service.Service):
 	def _call(self, job, retry):
 		while True:
 			db = self._get_db()
+			self._note(db)
 			try:
-				res = job(db)
-				res = yield res
+				res = yield job(db)
 			except (EnvironmentError,NameError):
 				e1,e2,e3 = sys.exc_info()
+				self._denote(db)
 				yield db.rollback()
 				raise e1,e2,e3
 			except Exception:
 				e1,e2,e3 = sys.exc_info()
+				self._denote(db)
 				yield db.rollback()
 				if retry:
 					retry -= 1
 					continue
 				raise e1,e2,e3
 			else:
+				self._denote(db)
 				yield db.commit()
 				returnValue( res )
 
@@ -392,11 +408,12 @@ class _DbThread(object):
 	def _do(self,job,*a,**k):
 		"""Wrapper for calling the background thread."""
 		self.count += 1
+		debug = k.get("_debug",False)
 		d = Deferred()
-		debug("QUEUE",self.tid,job,a,k)
+		debug_(debug,"QUEUE",self.tid,job,a,k)
 		self.q.put((d,job,a,k))
 		def _log(r):
-			debug("DEQUEUE",self.tid,r)
+			debug_(debug,"DEQUEUE",self.tid,r)
 			return r
 		d.addBoth(_log)
 		return d
