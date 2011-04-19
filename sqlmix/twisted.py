@@ -206,7 +206,8 @@ class DbPool(object,service.Service):
 		>>>     return d
 		>>> d = dbpool(proc, 10)
 
-		The procedure will be called up to 10 times.
+		The procedure will be retried up to 10 times if there are errors;
+		if they persist, the first error will be re-raised.
 
 		"""
 		if not job:
@@ -215,6 +216,7 @@ class DbPool(object,service.Service):
 
 	@inlineCallbacks
 	def _call(self, job, retry):
+		e1 is None
 		while True:
 			db = self._get_db()
 			self._note(db)
@@ -226,7 +228,8 @@ class DbPool(object,service.Service):
 				yield db.rollback()
 				raise e1,e2,e3
 			except Exception:
-				e1,e2,e3 = sys.exc_info()
+				if e1 is None:
+					e1,e2,e3 = sys.exc_info()
 				self._denote(db)
 				yield db.rollback()
 				if retry:
