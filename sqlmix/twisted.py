@@ -101,7 +101,7 @@ class DbPool(object,service.Service):
 	TODO: shrink the pool.
 	TODO: issue periodic keepalive requests.
 	"""
-	timeout = 10
+	timeout = 70 # one minute plus
 	implements(service.IService)
 
 	def __init__(self,*a,**k):
