@@ -1,3 +1,9 @@
+python-sqlmix (0.9.11-1) unstable; urgency=low
+
+  * Allow passing a type for dictionary results.
+
+ -- Matthias Urlichs <smurf@deee.intern.smurf.noris.de>  Wed, 27 Apr 2011 11:19:12 +0200
+
 python-sqlmix (0.9.10-1) unstable; urgency=low
 
   * Allow external debugging.

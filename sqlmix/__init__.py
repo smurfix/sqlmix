@@ -352,7 +352,8 @@ class Db(object):
 		Special keywords:
 
 		_dict is True: return a column/value dictionary.
-		>>>	info = dict(db.DoFn("select * from sometable where name=${myname}",myname="Fred"))
+		_dict is a type: as before, but use that. 
+		>>>	info = db.DoFn("select * from sometable where name=${myname}",myname="Fred", _dict=True)
 
 		"""
 		conn=self._conn()
@@ -371,7 +372,9 @@ class Db(object):
 
 		as_dict=kv.get("_dict",None)
 		if as_dict:
-			as_dict = map(lambda x:x[0], curs.description)
+			if as_dict is True:
+				as_dict = dict
+			names = map(lambda x:x[0], curs.description)
 
 		if not val:
 			raise NoData,_cmd
@@ -379,7 +382,7 @@ class Db(object):
 			raise ManyData,_cmd
 
 		if as_dict:
-			val = dict(zip(as_dict,val))
+			val = as_dict(zip(names,val))
 		return val
 
 	def Do(self, _cmd, **kv):
@@ -424,16 +427,18 @@ class Db(object):
 		'_head' is 1: first return is headers as text
 		'_head' is 2: first return is DB header tuples
 
-		'_dict' is 1: return entries as dictionary instead of list
-		'_empty' is 1: don't throw an error when no data are returned
-		'_callback': pass rows to a procedure, return row count
+		'_dict' is True: yield entries as dictionary instead of list
+		'_dict' is a type: as before, but use that. 
+		'_empty' is True: don't throw an error when no data are returned
+		'_callback': pass rows to a procedure (either as arguments or as
+		             keywords, depending on _dict), return row count
 
 		"""
 		cb = kv.get('_callback',None)
 		if cb:
 			n = 0
 			for x in self._DoSelect(_cmd, **kv):
-				if kv.get('_dict',0):
+				if kv.get('_dict',None):
 					cb(**x)
 				else:
 					cb(*x)
@@ -446,7 +451,6 @@ class Db(object):
 		conn=self._conn()
 
 		store=kv.get("_store",self.DB._store)
-		as_dict=kv.get("_dict",None)
 
 		if store:
 			curs=conn.cursor(*self.CArgs)
@@ -471,7 +475,9 @@ class Db(object):
 
 		as_dict=kv.get("_dict",None)
 		if as_dict:
-			as_dict = map(lambda x:x[0], curs.description)
+			if as_dict is True:
+				as_dict = dict
+			names = map(lambda x:x[0], curs.description)
 
 		val=curs.fetchone()
 		if not val:
@@ -485,7 +491,7 @@ class Db(object):
 		while val != None:
 			n += 1
 			if as_dict:
-				yield dict(zip(as_dict,val))
+				yield as_dict(zip(names,val))
 			else:
 				yield val[:]
 				# need to copy because the array may be re-used
