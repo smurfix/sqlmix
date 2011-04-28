@@ -1,0 +1,35 @@
+Metadata-Version: 1.1
+Name: sqlmix
+Version: 0.9.11
+Author: Matthias Urlichs
+Author-email: matthias at urlichs de
+Maintainer: Matthias Urlichs
+Maintainer-email: matthias at urlichs de
+Download-url: git://github.com/smurfix/sqlmix.git
+Summary: Database-agnostic SQL frontend
+Description: This module implements some nice common features for database access:
+        
+        * Common parameters for database setup (no more "db" vs. "database")
+        
+        * Single-line SQL statements and single-row SELECTs:
+          >>> db.Do("insert ...")
+          >>> foo,bar = db.DoFn("select ... where id=123")
+        
+        * SELECT statements which can be used as iterators:
+          >>> for a,b in db.DoSelect("select ..."):
+          >>>     ...
+        
+        * A common and clear syntax for placing values in SQL statements.
+          (The Python DBI supports five incompatible ones.)
+          >>> foo,bar = db.DoFn("select ... where id=${key}", key=whatever)
+        
+        An adapter for the Twisted framework is included. It runs all queries in long-lived threads, with minimal overhead, and packages the results in Deferred objects.
+        
+        This module makes no attempt whatsoever to hide database-specific SQL syntax
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Framework :: Twisted
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: GNU General Public License (GPL)
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Topic :: Database :: Front-Ends
