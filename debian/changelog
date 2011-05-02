@@ -1,3 +1,9 @@
+python-sqlmix (0.9.12-1) unstable; urgency=low
+
+  * Commit and rollback callbacks may return Deferreds
+
+ -- Matthias Urlichs <smurf@deee.intern.smurf.noris.de>  Mon, 02 May 2011 03:31:50 +0200
+
 python-sqlmix (0.9.11-1) unstable; urgency=low
 
   * Allow passing a type for dictionary results.

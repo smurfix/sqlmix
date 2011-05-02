@@ -45,7 +45,7 @@ from traceback import print_exc
 from zope.interface import implements
 from twisted.application import service
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred,DeferredList,maybeDeferred,inlineCallbacks,returnValue
+from twisted.internet.defer import Deferred,DeferredList,maybeDeferred,inlineCallbacks,returnValue,succeed
 from twisted.python import log
 from twisted.python.failure import Failure
 from twisted.python.threadpool import ThreadPool
@@ -58,6 +58,10 @@ __all__ = ('DbPool','NoData')
 _DEBUG = False
 
 NoData = sqlmix.NoData
+
+def _call(r,p,a,k):
+	"""Drop the first argument (i.e. lose the Deferred result)"""
+	return p(*a,**k)
 
 def tname():
 	import threading
@@ -287,28 +291,25 @@ class _DbThread(object):
 		return False
 
 	def _run_committed(self,r):
-		try:
-			for proc,a,k in self.committed[::-1]:
-				debug("AFTER COMMIT",proc,a,k)
-				proc(*a,**k)
-		except Exception:
-			print_exc()
-		finally:
-			self.committed = []
+		d = succeed(None)
+		for proc,a,k in self.committed[::-1]:
+			debug("AFTER COMMIT",proc,a,k)
+			d.addCallback(_call,proc,a,k)
+			d.addErrback(log.err)
+		d.addCallback(lambda _: r)
 		self.rolledback = []
-		return r
+		return d
+
 	def _run_rolledback(self,r):
 		self.committed = []
-		try:
-			for proc,a,k in self.rolledback[::-1]:
-				debug("AFTER ROLLBACK",proc,a,k)
-				proc(*a,**k)
-		except Exception:
-			print_exc()
-		finally:
-			debug("AFTER ALL ROLLBACK",r)
-			self.rolledback = []
-		return r
+		d = succeed(None)
+		for proc,a,k in self.rolledback[::-1]:
+			debug("AFTER ROLLBACK",proc,a,k)
+			d.addCallback(_call,proc,a,k)
+			d.addErrback(log.err)
+		d.addCallback(lambda _: r)
+		self.rolledback = []
+		return d
 
 	def run(self,q):
 		try:
