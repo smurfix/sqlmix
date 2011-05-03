@@ -121,22 +121,35 @@ class DbPool(object,service.Service):
 		self.lock = Lock()
 		self.cleaner = None
 		self._tb = {}
+		self.stopping = False
 		self.threads = ThreadPool(minthreads=2, maxthreads=10, name="Database")
 		self.threads.start()
-		reactor.addSystemEventTrigger('before', 'shutdown', self._dump)
-		reactor.addSystemEventTrigger('after', 'shutdown', self.threads.stop)
+		#reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
+		reactor.addSystemEventTrigger('after', 'shutdown', self._dump)
+		reactor.addSystemEventTrigger('after', 'shutdown', self.stop2)
+
+	def stop2(self):
+		if self.db is not None:
+			for db in self.db:
+				db[0].close("AfterShutdown Service")
+		self.threads.stop()
+
+	def stop(self):
+		self.stopping = True
 
 	def _get_db(self):
 		if self.db:
 			r = self.db.pop(0)[0]
 			debug("OLD",r.tid)
 		else:
+			if self.db is None:
+				import pdb;pdb.set_trace()
 			r = _DbThread(self)
 			debug("NEW",r.tid)
 		return r
 
 	def _put_db(self,db):
-		if self.db is None:
+		if self.db is None or self.stopping:
 			db.close("Shutdown")
 			return db.done
 		if db.q is None:
@@ -173,6 +186,9 @@ class DbPool(object,service.Service):
 
 	def stopService(self):
 		super(DbPool,self).stopService()
+		if self.cleaner:
+			self.cleaner.cancel()
+			self.cleaner = None
 		dbl = self.db
 		self.db = None
 		dl = []
@@ -220,43 +236,50 @@ class DbPool(object,service.Service):
 
 	@inlineCallbacks
 	def _call(self, job, retry):
+		debug("STARTCALL",job,retry)
+
 		e1 = None
-		while True:
-			db = self._get_db()
-			self._note(db)
-			try:
-				res = yield job(db)
-			except (EnvironmentError,NameError):
-				e1,e2,e3 = sys.exc_info()
-				self._denote(db)
-				yield db.rollback()
-				raise e1,e2,e3
-			except Exception:
-				if e1 is None:
+		try:
+			while True:
+				db = self._get_db()
+				self._note(db)
+				try:
+					res = yield job(db)
+				except (EnvironmentError,NameError):
 					e1,e2,e3 = sys.exc_info()
-				self._denote(db)
-				yield db.rollback()
-				if retry:
-					retry -= 1
-					continue
-				raise e1,e2,e3
-			else:
-				self._denote(db)
-				yield db.commit()
-				returnValue( res )
+					self._denote(db)
+					yield db.rollback()
+					raise e1,e2,e3
+				except BaseException:
+					if e1 is None:
+						e1,e2,e3 = sys.exc_info()
+					self._denote(db)
+					yield db.rollback()
+					if retry and isinstance(e2,Exception):
+						retry -= 1
+						continue
+					raise e1,e2,e3
+				else:
+					self._denote(db)
+					yield db.commit()
+					returnValue( res )
+		finally:
+			debug("ENDCALL",job,retry)
 
 	def _note(self,x):
-		try:
-			raise Exception
-		except Exception:
-			self._tb[x.tid] = sys.exc_info()
+		import inspect
+		self._tb[x.tid] = inspect.stack(1)
 	def _denote(self,x):
 		del self._tb[x.tid]
 	def _dump(self):
-		import traceback
 		for a,b in self._tb.items():
+			#(<frame object at 0x8a1b724>, '/mnt/daten/src/git/sqlmix/sqlmix/twisted.py', 250, '_note', ['\t\tself._tb[x.tid] = inspect.stack(1)\n'], 0)
+
 			print >>sys.stderr,"Stack",a
-			print >>sys.stderr,"".join(traceback.format_exception(*b))
+			for fr,f,l,fn,lin,lini in b[::-1]:
+				if fn == "__call__": break
+				print >>sys.stderr,"Line %d in %s: %s" % (l,f,fn)
+				print >>sys.stderr,"\t"+lin[lini].strip()
 
 tid = 0
 class _DbThread(object):
@@ -363,12 +386,15 @@ class _DbThread(object):
 
 	def close(self,reason="???"):
 		if self.q is None:
-			debug("DEAD 2",self.tid,reason)
+			if reason != "__del__":
+				debug("DEAD_CALLED_TWICE",self.tid,reason)
 			return
 		self.q.put((None,"ROLLBACK",[],{}))
 		debug("DEAD",self.tid,reason)
 		self.q = None
-	__del__ = close
+
+	def __del__(self):
+		self.close("__del__")
 
 	def commit(self,res=None):
 		d = Deferred()

@@ -1,3 +1,9 @@
+python-sqlmix (0.9.13-1) unstable; urgency=low
+
+  * Cleanups for safe shutdown.
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Tue, 03 May 2011 15:29:05 +0200
+
 python-sqlmix (0.9.12-1) unstable; urgency=low
 
   * Commit and rollback callbacks may return Deferreds
