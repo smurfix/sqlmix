@@ -1793,6 +1793,7 @@ parser SQL:
 
 	token END: "$"
 
+	token ACTION: "(?i)ACTION"
 	token ADD: "(?i)ADD"
 	token AFTER: "(?i)AFTER"
 	token ALTER: "(?i)ALTER"
@@ -1823,6 +1824,7 @@ parser SQL:
 	token LOCK: "(?i)LOCK"
 	token MAX_ROWS: "(?i)MAX_ROWS"
 	token MODIFY: "(?i)MODIFY"
+	token NO: "(?i)NO"
 	token NOT: "(?i)NOT"
 	token NULL: "(?i)NULL"
 	token ON: "(?i)ON"
@@ -1931,6 +1933,8 @@ parser SQL:
 		CASCADE {{ return "CASCADE" }}
 		| DELETE {{ return "DELETE" }}
 		| RESTRICT {{ return "RESTRICT" }}
+		| SET NULL {{ return "SET NULL" }}
+		| NO ACTION {{ return "NO ACTION" }}
 
 	rule s_create_def<<t>>:
 		( PRIMARY KEY? {{ ktyp="U"; qname=None }}

@@ -1,3 +1,9 @@
+python-sqlmix (0.9.14-1) unstable; urgency=low
+
+  * sql_diff: accept more ON DELETE/CASCADE options
+
+ -- Matthias Urlichs <smurf@smurf.noris.de>  Wed, 04 May 2011 17:51:41 +0200
+
 python-sqlmix (0.9.13-1) unstable; urgency=low
 
   * Cleanups for safe shutdown.
