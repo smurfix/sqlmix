@@ -139,7 +139,7 @@ class DbPool(object,service.Service):
 
 	def _get_db(self):
 		if self.db:
-			r = self.db.pop(0)[0]
+			r = self.db.pop()[0]
 			debug("OLD",r.tid)
 		else:
 			if self.db is None:
