@@ -314,25 +314,20 @@ class _DbThread(object):
 		return False
 
 	def _run_committed(self,r):
+		return self._run_(r,self.committed,"COMMIT")
+	def _run_rolledback(self,r):
+		return self._run_(r,self.rolledback,"ROLLBACK")
+	def _run_(self,r,rc,rcname):
+		self.committed = []
+		self.rolledback = []
 		d = succeed(None)
-		for proc,a,k in self.committed[::-1]:
-			debug("AFTER COMMIT",proc,a,k)
+		for proc,a,k in rc[::-1]:
+			debug("AFTER "+rcname,proc,a,k)
 			d.addCallback(_call,proc,a,k)
 			d.addErrback(log.err)
 		d.addCallback(lambda _: r)
-		self.rolledback = []
 		return d
 
-	def _run_rolledback(self,r):
-		self.committed = []
-		d = succeed(None)
-		for proc,a,k in self.rolledback[::-1]:
-			debug("AFTER ROLLBACK",proc,a,k)
-			d.addCallback(_call,proc,a,k)
-			d.addErrback(log.err)
-		d.addCallback(lambda _: r)
-		self.rolledback = []
-		return d
 
 	def run(self,q):
 		try:
