@@ -142,8 +142,6 @@ class DbPool(object,service.Service):
 			r = self.db.pop()[0]
 			debug("OLD",r.tid)
 		else:
-			if self.db is None:
-				import pdb;pdb.set_trace()
 			r = _DbThread(self)
 			debug("NEW",r.tid)
 		return r
