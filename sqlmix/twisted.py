@@ -248,18 +248,35 @@ class DbPool(object,service.Service):
 					self._denote(db)
 					yield db.rollback()
 					raise e1,e2,e3
-				except BaseException:
+				except Exception:
 					if e1 is None:
 						e1,e2,e3 = sys.exc_info()
 					self._denote(db)
 					yield db.rollback()
-					if retry and isinstance(e2,Exception):
+					if retry:
 						retry -= 1
 						continue
 					raise e1,e2,e3
+				except BaseException:
+					e1,e2,e3 = sys.exc_info()
+					self._denote(db)
+					yield db.rollback()
+					raise e1,e2,e3
 				else:
 					self._denote(db)
-					yield db.commit()
+					if isinstance(res,BaseException):
+						yield db.rollback()
+						if isinstance(res,(EnvironmentError,NameError)):
+							returnValue( res )
+						elif isinstance(res,Exception):
+							if retry:
+								retry -= 1
+								continue
+							returnValue( res )
+						else: # BaseException
+							returnValue( res )
+					else:
+						yield db.commit()
 					returnValue( res )
 		finally:
 			debug("ENDCALL",job,retry)
