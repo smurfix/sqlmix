@@ -1,6 +1,7 @@
 python-sqlmix (0.9.17-1) unstable; urgency=low
 
   * Allow returning errors inline, not as exception.
+  * Don't record database stacks when not debugging.
 
  -- Matthias Urlichs <smurf@smurf.noris.de>  Mon, 09 May 2011 11:08:28 +0200
 

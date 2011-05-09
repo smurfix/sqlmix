@@ -282,11 +282,14 @@ class DbPool(object,service.Service):
 			debug("ENDCALL",job,retry)
 
 	def _note(self,x):
+		if not _DEBUG: return
 		import inspect
 		self._tb[x.tid] = inspect.stack(1)
 	def _denote(self,x):
+		if not _DEBUG: return
 		del self._tb[x.tid]
 	def _dump(self):
+		if not _DEBUG: return
 		for a,b in self._tb.items():
 			#(<frame object at 0x8a1b724>, '/mnt/daten/src/git/sqlmix/sqlmix/twisted.py', 250, '_note', ['\t\tself._tb[x.tid] = inspect.stack(1)\n'], 0)
 
