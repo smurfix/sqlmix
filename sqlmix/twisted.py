@@ -122,7 +122,7 @@ class DbPool(object,service.Service):
 		self.cleaner = None
 		self._tb = {}
 		self.stopping = False
-		self.threads = ThreadPool(minthreads=2, maxthreads=10, name="Database")
+		self.threads = ThreadPool(minthreads=2, maxthreads=100, name="Database")
 		self.threads.start()
 		#reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
 		reactor.addSystemEventTrigger('after', 'shutdown', self._dump)
@@ -137,13 +137,20 @@ class DbPool(object,service.Service):
 	def stop(self):
 		self.stopping = True
 
-	def _get_db(self):
+	def _get_db(self,tid=None):
 		if self.db:
 			r = self.db.pop()[0]
-			debug("OLD",r.tid)
+			s="OLD"
 		else:
 			r = _DbThread(self)
-			debug("NEW",r.tid)
+			s="NEW"
+
+		if tid:
+			debug(s, r.tid,tid)
+			r.tid=tid
+		else:
+			debug(s, r.tid)
+
 		return r
 
 	def _put_db(self,db):
@@ -234,15 +241,25 @@ class DbPool(object,service.Service):
 
 	@inlineCallbacks
 	def _call(self, job, retry):
-		debug("STARTCALL",job,retry)
+		global tid
+		tid += 1
+		mtid = tid
+		debug("STARTCALL",job,retry,mtid)
 
 		e1 = None
 		try:
 			while True:
-				db = self._get_db()
+				db = self._get_db(mtid)
 				self._note(db)
 				try:
-					res = yield job(db)
+					debug("CALL JOB",mtid)
+					d = job(db)
+					debug("RET JOB",mtid,d)
+					def pr(r):
+						debug("RES JOB",mtid,r)
+						return r
+					d.addBoth(pr)
+					res = yield d
 				except (EnvironmentError,NameError):
 					e1,e2,e3 = sys.exc_info()
 					self._denote(db)
@@ -299,6 +316,11 @@ class DbPool(object,service.Service):
 				print >>sys.stderr,"Line %d in %s: %s" % (l,f,fn)
 				print >>sys.stderr,"\t"+lin[lini].strip()
 
+def _do_callback(tid,d,res):
+	debug("DO_CB",tid,d,res)
+	d.callback(res)
+	debug("DID_CB",tid,d,res)
+
 tid = 0
 class _DbThread(object):
 	def __init__(self,parent):
@@ -330,6 +352,11 @@ class _DbThread(object):
 			d = self.rollback()
 		d.addErrback(log.err)
 		return False
+
+	def call_committed(self,proc,*a,**k):
+		self.committed.append((proc,a,k))
+	def call_rolledback(self,proc,*a,**k):
+		self.rolledback.append((proc,a,k))
 
 	def _run_committed(self,r):
 		return self._run_(r,self.committed,"COMMIT")
@@ -367,7 +394,7 @@ class _DbThread(object):
 			try:
 				d,proc,a,k = q.get()
 				res = None
-				debug("DO",self.tid,proc,a,k)
+				debug("DO",self.tid,d,proc,a,k)
 				if proc == "COMMIT":
 					db.commit()
 					res = k.get('res',None)
@@ -391,7 +418,7 @@ class _DbThread(object):
 			finally:
 				if d and not sent:
 					debug("CB",self.tid,d,res)
-					reactor.callFromThread(d.callback,res)
+					reactor.callFromThread(_do_callback,self.tid,d,res)
 				debug("DID",self.tid,proc)
 		db.close()
 		debug("STOP",self.tid)
@@ -442,16 +469,10 @@ class _DbThread(object):
 		d.addCallbacks(lambda _: r, lambda _: _)
 		return d
 
-
-	def call_committed(self,proc,*a,**k):
-		self.committed.append((proc,a,k))
-	def call_rolledback(self,proc,*a,**k):
-		self.rolledback.append((proc,a,k))
-
 	def _do(self,job,*a,**k):
 		"""Wrapper for calling the background thread."""
 		self.count += 1
-		debug = k.get("_debug",False)
+		debug = k.get("_debug",_DEBUG)
 		d = Deferred()
 		debug_(debug,"QUEUE",self.tid,job,a,k)
 		self.q.put((d,job,a,k))
