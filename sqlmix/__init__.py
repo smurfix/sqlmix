@@ -201,10 +201,22 @@ class Db(object):
 	_set_ac1 = True
 	_set_ac2 = True
 	_set_timeout = True
-	def __init__(self, **kwargs):
+	def __init__(self, cfg=None, **kwargs):
 		"""\
 		Possible keywords: dbtype,host,port,database,username,password
 		"""
+		if cfg is not None:
+			try:
+				cffile = kwargs['config']
+			except KeyError:
+				from os.path import expanduser as home
+				cffile = home("~/.sqlmix.conf")
+			from ConfigParser import ConfigParser
+			cfp = ConfigParser()
+			cfp.read(cffile)
+			args = dict(cfp.items(cfg))
+			args.update(kwargs)
+			kwargs = args
 
 		dbtype = kwargs.get("dbtype","mysql")
 		self.DB = _databases[dbtype](**kwargs)
