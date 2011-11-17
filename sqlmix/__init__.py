@@ -194,6 +194,8 @@ class Db(object):
 	Main database connection object.
 
 	Internally, manages one back-end connection per thread.
+
+	Possible keywords: dbtype,host,port,database,username,password; config=inifile,cfg=section
 	"""
 
 	# These variables cache whether the database supports turning off
@@ -202,9 +204,6 @@ class Db(object):
 	_set_ac2 = True
 	_set_timeout = True
 	def __init__(self, cfg=None, **kwargs):
-		"""\
-		Possible keywords: dbtype,host,port,database,username,password
-		"""
 		if cfg is not None:
 			try:
 				cffile = kwargs['config']
