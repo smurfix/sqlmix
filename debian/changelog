@@ -1,3 +1,9 @@
+python-sqlmix (0.9.19-1) smurf; urgency=low
+
+  * Add prefix for debug output.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 24 Nov 2011 13:00:33 +0100
+
 python-sqlmix (0.9.18-1) smurf; urgency=low
 
   * Use ConfigParser to get database connection values

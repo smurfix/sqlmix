@@ -86,7 +86,11 @@ def debug_(flag,*a):
 		else:
 			return repr(x)
 	s=" ".join((pr(x) for x in a))
-	sys.stderr.write(s+"\n")
+
+	if flag is True: fl=""
+	else: fl=flag+": "
+	sys.stderr.write(fl+s+"\n")
+	sys.stderr.flush()
 def debug(*a):
 	debug_(_DEBUG,*a)
 
