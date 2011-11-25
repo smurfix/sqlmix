@@ -39,6 +39,15 @@ Moreover,
 * How to use a database asynchronously, e.g. via Twisted "deferred" handlers,
   is non-obvious and, again, requires too much boilerplate code.
 
+* Retrying an entire transaction (if it fails due to optimism) is difficult.
+  There's no object representing the transaction.
+
+Using an object-oriented wrapper is out of the question: they work synchronously
+and thus are forbidden in asynchronous code.
+
+I don't want to multi-thread my main program. Debugging threaded helpers (file system,
+database, possibly other synchronous libraries) is difficult enough.
+
 -----
 Usage
 -----
@@ -46,7 +55,7 @@ Usage
 Using this module is rather simple.
 
 >>>	from sqlmix import Db,NoData
->>>	db = Db(database="testdb",username="testuser",password="testpass")
+>>>	db = Db(database="testdb",username="testuser",password="testpass", isolation='repeatable read')
 >>>	# db = Db(dbtype="sqlite",database="/tmp/testdb.sqlite")
 >>>	db.Do("""\
 ...		create table test1 (
@@ -68,6 +77,8 @@ Using this module is rather simple.
 >>>		j += 1
 >>>	assert n == 3
 >>>	print "Success."
+
+See "pydoc sqlmix" for further details.
 
 Error Handling
 --------------

@@ -1,3 +1,10 @@
+python-sqlmix (0.9.20-1) smurf; urgency=low
+
+  * Added the ability to set the transaction isolation level.
+  * Also updated the documentation.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 25 Nov 2011 12:59:43 +0100
+
 python-sqlmix (0.9.19-1) smurf; urgency=low
 
   * Add prefix for debug output.

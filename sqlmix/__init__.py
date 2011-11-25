@@ -203,6 +203,7 @@ class Db(object):
 	_set_ac1 = True
 	_set_ac2 = True
 	_set_timeout = True
+	_set_isolation = True
 	def __init__(self, cfg=None, **kwargs):
 		if cfg is not None:
 			try:
@@ -232,6 +233,7 @@ class Db(object):
 #			self.CArgs = (self.DB.DB.cursors.CursorNW,)
 #		else:
 		self.CArgs = ()
+		self.isolation = kwargs.get("isolation",None)
 #
 
 		(self.arg_init, self.arg_do, self.arg_done) \
@@ -257,6 +259,10 @@ class Db(object):
 			if self._set_timeout:
 				try: r.cursor(*self.CArgs).execute("SET WAIT_TIMEOUT=7200") # 2h
 				except Exception: self._set_timeout = False
+
+			if self._set_isolation and self.isolation:
+				try: r.cursor(*self.CArgs).execute("SET SESSION TRANSACTION ISOLATION LEVEL "+self.isolation)
+				except Exception: self._set_isolation = False
 
 #			try:
 #				r.stringformat = self.DB.DB.UNICODE_STRINGFORMAT
