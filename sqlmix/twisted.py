@@ -341,6 +341,9 @@ class _DbThread(object):
 		self.committed = []
 		self.rolledback = []
 
+	def __repr__(self):
+		return "<_DbT.%d>"%(self.tid,)
+
 	def __enter__(self):
 		self.parent._note(self)
 		return self

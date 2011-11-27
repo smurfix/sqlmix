@@ -1,3 +1,9 @@
+python-sqlmix (0.9.21-1) smurf; urgency=low
+
+  * Added __repr__ to DB thread object
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 27 Nov 2011 22:41:16 +0100
+
 python-sqlmix (0.9.20-1) smurf; urgency=low
 
   * Added the ability to set the transaction isolation level.
