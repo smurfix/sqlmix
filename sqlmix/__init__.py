@@ -64,6 +64,8 @@ class db_data(object):
 			except KeyError:
 				pass
 			else:
+				if f == "port":
+					v=int(v)
 				if v is not None:
 					setattr(self,f,v)
 

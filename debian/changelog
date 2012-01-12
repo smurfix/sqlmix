@@ -1,3 +1,9 @@
+python-sqlmix (0.9.21-2) smurf; urgency=low
+
+  * Database port needs to be an integer
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 12 Jan 2012 17:45:12 +0100
+
 python-sqlmix (0.9.21-1) smurf; urgency=low
 
   * Added __repr__ to DB thread object
