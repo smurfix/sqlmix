@@ -9,3 +9,6 @@ build-stamp
 build-python*
 debian/python-sqlmix/
 sql_diff
+MANIFEST
+dist
+*.pyo
