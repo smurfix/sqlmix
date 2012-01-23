@@ -14,7 +14,7 @@ parameterized SQL syntax.
 """
 
 setup (name = "sqlmix",
-       version = "0.9.11",
+       version = "0.9.21",
        description = description,
        long_description = long_description,
        author = "Matthias Urlichs",
