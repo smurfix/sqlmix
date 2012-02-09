@@ -471,6 +471,10 @@ class _DbThread(object):
 		d.addBoth(self._done)
 		return d
 
+	def done(self,d):
+		"""Convenience method: add myself to a Deferred to stop processing"""
+		d.addCallbacks(self.commit,self.rollback)
+
 	def _done(self,r):
 		d = maybeDeferred(self.parent._put_db,self)
 		d.addCallbacks(lambda _: r, lambda _: _)

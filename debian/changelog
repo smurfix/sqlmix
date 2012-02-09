@@ -1,3 +1,9 @@
+python-sqlmix (0.9.22-1) smurf; urgency=low
+
+  * re-add old addDone() method as done() (Twisted accessor)
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 09 Feb 2012 08:23:44 +0100
+
 python-sqlmix (0.9.21-2) smurf; urgency=low
 
   * Database port needs to be an integer
