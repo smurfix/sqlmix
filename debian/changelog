@@ -1,3 +1,9 @@
+python-sqlmix (0.9.23-2) smurf; urgency=low
+
+  * *sigh* rename "done" to "release", there's already a 'done' Deferred
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Thu, 09 Feb 2012 08:40:01 +0100
+
 python-sqlmix (0.9.23-1) smurf; urgency=low
 
   * Export ManyData from Twisted.

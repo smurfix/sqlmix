@@ -472,7 +472,7 @@ class _DbThread(object):
 		d.addBoth(self._done)
 		return d
 
-	def done(self,d):
+	def release(self,d):
 		"""Convenience method: add myself to a Deferred to stop processing"""
 		d.addCallbacks(self.commit,self.rollback)
 
