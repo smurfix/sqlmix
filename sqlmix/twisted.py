@@ -53,11 +53,12 @@ from twisted.internet import threads
 from threading import Lock
 from Queue import Queue
 
-__all__ = ('DbPool','NoData')
+__all__ = ('DbPool','NoData','ManyData')
 
 _DEBUG = False
 
 NoData = sqlmix.NoData
+ManyData = sqlmix.ManyData
 
 def _call(r,p,a,k):
 	"""Drop the first argument (i.e. lose the Deferred result)"""
