@@ -56,6 +56,7 @@ def fixup_error(cmd):
 class db_data(object):
 	sequential = False
 	_store = 1 # safe default
+	_cursor = True
 	def __init__(self, **kwargs):
 		"""standard keywords: host,port,database,username,password"""
 		for f in "host port database username password".split():
@@ -80,6 +81,21 @@ class _db_mysql(db_data):
 
 	def conn(self,**kwargs):
 		return self.DB.connect(db=self.database, host=self.host, user=self.username, passwd=self.password, port=self.port, charset="utf8")
+
+class _db_ultramysql(db_data):
+	_store = 1
+	_cursor = False
+	host="localhost"
+	port=3306
+	def __init__(self, **kwargs):
+		self.DB = __import__("umysql")
+		db_data.__init__(self,**kwargs)
+		self.DB.paramstyle = 'format'
+
+	def conn(self,**kwargs):
+		c = self.DB.Connection()
+		c.connect(self.host, self.port, self.username, self.password, self.database, False, "utf8")
+		return c
 
 class _db_odbc(db_data):
 	def __init__(self, **kwargs):
@@ -120,6 +136,7 @@ _databases = {
 	    "odbc": _db_odbc,
 	    "postgres": _db_postgres,
 	    "sqlite": _db_sqlite,
+	    "ultramysql": _db_ultramysql,
 }
 
 
@@ -174,11 +191,11 @@ def _done_pyformat(cmd,args):
 	return (cmd,args)
 
 _parsers = {
-	    "qmark"   : (_init_qmark,_do_qmark,_done_qmark),
-            "numeric" : (_init_numeric,_do_numeric,_done_numeric),
-            "named"   : (_init_named,_do_named,_done_named),
-            "format"  : (_init_format,_do_format,_done_format),
-            "pyformat": (_init_pyformat,_do_pyformat,_done_pyformat),
+		"qmark"   : (_init_qmark,_do_qmark,_done_qmark),
+		"numeric" : (_init_numeric,_do_numeric,_done_numeric),
+		"named"   : (_init_named,_do_named,_done_named),
+		"format"  : (_init_format,_do_format,_done_format),
+		"pyformat": (_init_pyformat,_do_pyformat,_done_pyformat),
  	   }
 
 
@@ -238,8 +255,12 @@ class Db(object):
 		self.isolation = kwargs.get("isolation",None)
 #
 
+		if hasattr(self.DB,'paramstyle'):
+			paramstyle = self.DB.paramstyle
+		else:
+			paramstyle = self.DB.DB.paramstyle
 		(self.arg_init, self.arg_do, self.arg_done) \
-			 = _parsers[self.DB.DB.paramstyle]
+			 = _parsers[paramstyle]
 		
 	def _conn(self, skip=False):
 		"""Create a connection to the underlying database."""
@@ -255,15 +276,28 @@ class Db(object):
 				except AttributeError: self._set_ac1 = False
 				else: self._set_ac2 = False
 			if self._set_ac2:
-				try: r.cursor(*self.CArgs).execute("SET AUTOCOMMIT=0")
+				try:
+					if self.DB._cursor:
+						r.cursor(*self.CArgs).execute("SET AUTOCOMMIT=0")
+					else:
+						r.query("SET AUTOCOMMIT=0")
 				except Exception: self._set_ac2 = False
 		
 			if self._set_timeout:
-				try: r.cursor(*self.CArgs).execute("SET WAIT_TIMEOUT=7200") # 2h
+				try: 
+					if self.DB._cursor:
+						r.cursor(*self.CArgs).execute("SET WAIT_TIMEOUT=7200") # 2h
+					else:
+						r.query("SET WAIT_TIMEOUT=7200")
 				except Exception: self._set_timeout = False
 
 			if self._set_isolation and self.isolation:
-				try: r.cursor(*self.CArgs).execute("SET SESSION TRANSACTION ISOLATION LEVEL "+self.isolation)
+				try:
+					if self.DB._cursor:
+						r.cursor(*self.CArgs).execute("SET SESSION TRANSACTION ISOLATION LEVEL "+self.isolation)
+					else:
+						r.query("SET SESSION TRANSACTION ISOLATION LEVEL "+self.isolation)
+						
 				except Exception: self._set_isolation = False
 
 #			try:
@@ -272,10 +306,18 @@ class Db(object):
 #			except AttributeError:
 #				pass
 
-			r.commit()
+			self._commit(r)
 			self._c.conn = r
 		#r.cursor(*self.CArgs).execute('BEGIN')
 		return self._c.conn
+
+	def _commit(self,c,cmd="commit"):
+		if(hasattr(c,cmd)):
+			getattr(c,cmd)()
+		elif self.DB._cursor:
+			c.cursor(*self.CArgs).execute(cmd)
+		else:
+			c.query(cmd)
 
 	def close(self):
 		"""\
@@ -297,7 +339,8 @@ class Db(object):
 		if self._trace:
 			self._trace("Commit","","")
 		c = self._conn(skip=True)
-		if c: c.commit()
+		if c:
+			self._commit(c)
 
 		# callbacks
 		self._c.rolledback = None
@@ -319,7 +362,8 @@ class Db(object):
 		if self._trace:
 			self._trace("RollBack","","")
 		c = self._conn(skip=True)
-		if c: c.rollback()
+		if c:
+			self._commit(c,"rollback")
 
 		# cancel callbacks
 		self._c.committed = None
@@ -370,24 +414,34 @@ class Db(object):
 		
 		Special keywords:
 
-		_dict is True: return a column/value dictionary.
+		_dict is True: return a column/value dictionary instead of an array.
 		_dict is a type: as before, but use that. 
 		>>>	info = db.DoFn("select * from sometable where name=${myname}",myname="Fred", _dict=True)
 
 		"""
 		conn=self._conn()
-		curs=conn.cursor(*self.CArgs)
-
 		_cmd = self.prep(_cmd, **kv)
 		try:
-			curs.execute(*_cmd)
+			if self.DB._cursor:
+				curs=conn.cursor(*self.CArgs)
+				curs.execute(*_cmd)
+			else:
+				curs=conn.query(*_cmd)
 		except:
 			fixup_error(_cmd)
 			raise
-		val=curs.fetchone()
+
+		if hasattr(curs,'fetchone'):
+			val = curs.fetchone()
+		elif not curs.rows:
+			val = None
+		else:
+			val = curs.rows.pop(0)
 
 		if self._trace:
 			self._trace("DoFn",_cmd,val)
+		if not val:
+			raise NoData,_cmd
 
 		as_dict=kv.get("_dict",None)
 		if as_dict:
@@ -395,9 +449,7 @@ class Db(object):
 				as_dict = dict
 			names = map(lambda x:x[0], curs.description)
 
-		if not val:
-			raise NoData,_cmd
-		if curs.fetchone():
+		if curs.fetchone() if hasattr(curs,'fetchone') else curs.rows:
 			raise ManyData,_cmd
 
 		if as_dict:
@@ -407,17 +459,26 @@ class Db(object):
 	def Do(self, _cmd, **kv):
 		"""Database-specific Do function"""
 		conn=self._conn()
-		curs=conn.cursor(*self.CArgs)
-
 		_cmd = self.prep(_cmd, **kv)
+
 		try:
-			curs.execute(*_cmd)
+			if self.DB._cursor:
+				curs=conn.cursor(*self.CArgs)
+				curs.execute(*_cmd)
+			else:
+				curs=conn.query(*_cmd)
 		except:
 			fixup_error(_cmd)
 			raise
-		r = curs.lastrowid
-		if not r:
-			r = curs.rowcount
+
+		if isinstance(curs,(tuple,list)): # ultramysql
+			r = curs[1]
+			if not r:
+				r = curs[0]
+		else:
+			r = curs.lastrowid
+			if not r:
+				r = curs.rowcount
 
 		if self._trace:
 			self._trace("DoFn",_cmd,r)
@@ -471,19 +532,23 @@ class Db(object):
 
 		store=kv.get("_store",self.DB._store)
 
-		if store:
-			curs=conn.cursor(*self.CArgs)
-		elif self.DB.dbtype == "mysql":
-			curs=conn.cursor(self.DB.DB.cursors.SSCursor)
-		else:
-			curs=conn.cursor(*self.CArgs)
-
+		if self.DB._cursor:
+			if store:
+				curs=conn.cursor(*self.CArgs)
+			elif self.DB.dbtype == "mysql":
+				curs=conn.cursor(self.DB.DB.cursors.SSCursor)
+			else:
+				curs=conn.cursor(*self.CArgs)
 		_cmd = self.prep(_cmd, **kv)
 		try:
-			curs.execute(*_cmd)
+			if self.DB._cursor:
+				curs.execute(*_cmd)
+			else:
+				curs = conn.query(*_cmd)
 		except:
 			fixup_error(_cmd)
 			raise
+
 	
 		head = kv.get("_head",None)
 		if head:
@@ -498,7 +563,7 @@ class Db(object):
 				as_dict = dict
 			names = map(lambda x:x[0], curs.description)
 
-		val=curs.fetchone()
+		val = curs.fetchone() if hasattr(curs,'fetchone') else curs.rows.pop(0) if curs.rows else None
 		if not val:
 			if self._trace:
 				self._trace("DoSelect",_cmd,None)
@@ -507,7 +572,7 @@ class Db(object):
 				raise NoData,_cmd
 
 		n=0
-		while val != None:
+		while val is not None:
 			n += 1
 			if as_dict:
 				yield as_dict(zip(names,val))
@@ -516,7 +581,7 @@ class Db(object):
 				# need to copy because the array may be re-used
 				# internally by the database driver, but the consumer
 				# might want to store/modify it
-			val=curs.fetchone()
+			val = curs.fetchone() if hasattr(curs,'fetchone') else curs.rows.pop(0) if curs.rows else None
 
 		if self._trace:
 			self._trace("DoSelect",_cmd,n)
