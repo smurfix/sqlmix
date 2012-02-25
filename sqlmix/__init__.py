@@ -37,6 +37,14 @@ import re
 from sys import exc_info
 from threading import local
 
+class CommitThread(Exception):
+	u"""\
+		If you leave a database handler's with … block by raising an
+		exception descending from this class, the transaction will be
+		committed instead of being rolled back.
+		"""
+	pass
+
 class FakeLocal(object):
 	"""\
 		This connection is only used by one thread,
@@ -585,4 +593,18 @@ class Db(object):
 
 		if self._trace:
 			self._trace("DoSelect",_cmd,n)
+
+
+	def __call__(self):
+		return self
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, a,b,c):
+		if b is None or isinstance(b,CommitThread):
+			self.commit()
+		else:
+			self.rollback()
+		return False
 

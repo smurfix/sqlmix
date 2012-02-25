@@ -95,14 +95,6 @@ def debug_(flag,*a):
 def debug(*a):
 	debug_(_DEBUG,*a)
 
-class CommitThread(Exception):
-	u"""\
-		If you leave a database handler's with … block by raising an
-		exception descending from this class, the transaction will be
-		committed instead of being rolled back.
-		"""
-	pass
-
 class DbPool(object,service.Service):
 	"""\
 	Manage a pool of database connections.
@@ -352,7 +344,7 @@ class _DbThread(object):
 		self.parent._denote(self)
 		if self.q is None:
 			return False
-		if b is None or isinstance(b,CommitThread):
+		if b is None or isinstance(b,sqlmix.CommitThread):
 			d = self.commit()
 		else:
 			from traceback import format_exception
