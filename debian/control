@@ -9,7 +9,7 @@ Standards-Version: 3.7.2
 Package: python-sqlmix
 Architecture: all
 Depends: ${python:Depends}, python (>= 2.6), yapps2-runtime
-Recommends: python-mysqldb, python-ultramysql
+Recommends: python-mysqldb, python-ultramysql, python-psycopg2
 Suggests: python-twisted
 Replaces: sqlmix
 Conflicts: sqlmix

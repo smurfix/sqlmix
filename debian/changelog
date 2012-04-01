@@ -1,3 +1,9 @@
+python-sqlmix (0.9.27-1) smurf; urgency=low
+
+  * Use python-psycopg2 for PostgreSQL access.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 01 Apr 2012 10:37:11 +0200
+
 python-sqlmix (0.9.26-1) smurf; urgency=low
 
   * Implement 'with' block in plain sqlmix

@@ -119,11 +119,11 @@ class _db_odbc(db_data):
 
 class _db_postgres(db_data):
 	def __init__(self, **kwargs):
-		self.DB = __import__("pgdb")
+		self.DB = __import__("psycopg2")
 		db_data.__init__(self,**kwargs)
 
 	def conn(self,**kwargs):
-		if self.port:
+		if getattr(self,"port",None):
 			self.host = self.host+":"+str(self.port)
 			self.port=None
 
