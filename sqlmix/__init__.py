@@ -238,9 +238,12 @@ class Db(object):
 			except KeyError:
 				from os.path import expanduser as home
 				cffile = home("~/.sqlmix.conf")
-			from ConfigParser import ConfigParser
-			cfp = ConfigParser()
-			cfp.read(cffile)
+			if isinstance(cffile,basestring):
+				from ConfigParser import ConfigParser
+				cfp = ConfigParser()
+				cfp.read(cffile)
+			else:
+				cfp = cffile
 			args = dict(cfp.items(cfg))
 			args.update(kwargs)
 			kwargs = args
