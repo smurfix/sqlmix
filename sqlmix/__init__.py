@@ -233,8 +233,6 @@ class Db(object):
 	_set_isolation = True
 
 	def __init__(self, cfg=None, **kwargs):
-		self._trave = kwargs.get("trace",None)
-
 		if cfg is not None:
 			try:
 				cffile = kwargs['config']
@@ -251,17 +249,19 @@ class Db(object):
 			args.update(kwargs)
 			kwargs = args
 
+		self._trace = kwargs.get("trace",None)
+
 		dbtype = kwargs.get("dbtype","mysql")
 		self.DB = _databases[dbtype](**kwargs)
 		self.DB.dbtype=dbtype
-		self._trace("INIT",dbtype,kwargs)
+		if self._trace is not None:
+			self._trace("INIT",dbtype,kwargs)
 
 		if kwargs.get("_single_thread",False):
 			self._c = FakeLocal()
 		else:
 			self._c = local()
 		self._c.conn=None
-		self._trace=None
 
 #		if dbtype == "mysql":
 #			self.CArgs = (self.DB.DB.cursors.CursorNW,)
@@ -351,7 +351,7 @@ class Db(object):
 		This calls all procedures that have been registered with `call_committed`
 		in reverse order, and discards all calls registered with `call_rolledback`.
 		"""
-		if self._trace:
+		if self._trace is not None:
 			self._trace("Commit","","")
 		c = self._conn(skip=True)
 		if c:
@@ -374,7 +374,7 @@ class Db(object):
 		This calls all procedures that have been registered with `call_rolledback`
 		in reverse order, and discards all calls registered with `call_committed`.
 		"""
-		if self._trace:
+		if self._trace is not None:
 			self._trace("RollBack","","")
 		c = self._conn(skip=True)
 		if c:
@@ -453,7 +453,7 @@ class Db(object):
 		else:
 			val = curs.rows.pop(0)
 
-		if self._trace:
+		if self._trace is not None:
 			self._trace("DoFn",_cmd,val)
 		if not val:
 			raise NoData,_cmd
@@ -495,7 +495,7 @@ class Db(object):
 			if not r:
 				r = curs.rowcount
 
-		if self._trace:
+		if self._trace is not None:
 			self._trace("DoFn",_cmd,r)
 		if r == 0 and not kv.has_key("_empty"):
 			raise NoData,_cmd
@@ -580,7 +580,7 @@ class Db(object):
 
 		val = curs.fetchone() if hasattr(curs,'fetchone') else curs.rows.pop(0) if curs.rows else None
 		if not val:
-			if self._trace:
+			if self._trace is not None:
 				self._trace("DoSelect",_cmd,None)
 
 			if not kv.has_key("_empty"):
@@ -598,7 +598,7 @@ class Db(object):
 				# might want to store/modify it
 			val = curs.fetchone() if hasattr(curs,'fetchone') else curs.rows.pop(0) if curs.rows else None
 
-		if self._trace:
+		if self._trace is not None:
 			self._trace("DoSelect",_cmd,n)
 
 

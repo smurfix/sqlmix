@@ -1,3 +1,9 @@
+python-sqlmix (0.9.29-2) smurf; urgency=low
+
+  * previous patch was incomplete
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 15 Apr 2012 21:08:47 +0200
+
 python-sqlmix (0.9.29-1) smurf; urgency=low
 
   * Tracing.
