@@ -231,7 +231,10 @@ class Db(object):
 	_set_ac2 = True
 	_set_timeout = True
 	_set_isolation = True
+
 	def __init__(self, cfg=None, **kwargs):
+		self._trave = kwargs.get("trace",None)
+
 		if cfg is not None:
 			try:
 				cffile = kwargs['config']
@@ -251,6 +254,7 @@ class Db(object):
 		dbtype = kwargs.get("dbtype","mysql")
 		self.DB = _databases[dbtype](**kwargs)
 		self.DB.dbtype=dbtype
+		self._trace("INIT",dbtype,kwargs)
 
 		if kwargs.get("_single_thread",False):
 			self._c = FakeLocal()

@@ -1,3 +1,9 @@
+python-sqlmix (0.9.29-1) smurf; urgency=low
+
+  * Tracing.
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 15 Apr 2012 21:02:35 +0200
+
 python-sqlmix (0.9.28-1) smurf; urgency=low
 
   * Allow setting up a database by passing the ConfigParser object directly
