@@ -1,3 +1,11 @@
+python-sqlmix (0.9.30) smurf; urgency=low
+
+  * Build-depend on all the database goodies.
+  * Logging.
+  * Workaround for views (mysql)
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 05 May 2012 07:49:43 +0200
+
 python-sqlmix (0.9.29-2) smurf; urgency=low
 
   * previous patch was incomplete
