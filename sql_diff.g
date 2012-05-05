@@ -1076,7 +1076,8 @@ class Schema:
 			return None
 		if verbose:
 			trace("Reading",db,name)
-		n,desc=db.db.DoFn("show create table `%s`" % (name,))
+		x = db.db.DoFn("show create table `%s`" % (name,))
+		n,desc=x[0:2]
 
 		# print desc
 		desc=desc.rstrip()
