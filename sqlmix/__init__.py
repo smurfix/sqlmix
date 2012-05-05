@@ -342,7 +342,12 @@ class Db(object):
 
 		c = self._conn(skip=True)
 		if c:
+			if self._trace is not None:
+				self._trace("Close","","")
 			c.close()
+		else:
+			if self._trace is not None:
+				self._trace("Close","NoConn","")
 
 	def commit(self):
 		"""\
