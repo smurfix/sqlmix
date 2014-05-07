@@ -12,3 +12,4 @@ sql_diff
 MANIFEST
 dist
 *.pyo
+test.db
