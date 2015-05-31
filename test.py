@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from __future__ import generators,absolute_import
+from __future__ import generators,absolute_import,print_function
 
 """\
 Simple test script
@@ -63,7 +63,7 @@ def run_test(x,ai,*a):
 
 	for i, in db.DoSelect("select id from test1 where id < 0", _empty=True):
 		assert False,"Returned nonsense"
-	print "Success."
+	print("Success.")
 
 try: os.unlink("test.db")
 except EnvironmentError: pass

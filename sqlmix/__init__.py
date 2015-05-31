@@ -32,10 +32,16 @@ This module provides a thread-safe way to access any Python SQL database with
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from time import time,sleep
+import sys
 import os
 import re
 from sys import exc_info
 from threading import local
+
+PY2 = sys.version_info[0] == 2
+if not PY2:
+	basestring = str
+
 
 class CommitThread(Exception):
 	u"""\
@@ -132,7 +138,10 @@ class _db_postgres(db_data):
 class _db_sqlite(db_data):
 	sequential = True
 	def __init__(self, **kwargs):
-		self.DB = __import__("pysqlite2.dbapi2")
+		if PY2:
+			self.DB = __import__("pysqlite2.dbapi2")
+		else:
+			self.DB = __import__("sqlite3.dbapi2")
 		if hasattr(self.DB,"dbapi2"): self.DB=self.DB.dbapi2
 		db_data.__init__(self,**kwargs)
 
@@ -240,7 +249,10 @@ class Db(object):
 				from os.path import expanduser as home
 				cffile = home("~/.sqlmix.conf")
 			if isinstance(cffile,basestring):
-				from ConfigParser import ConfigParser
+				if PY2:
+					from ConfigParser import ConfigParser
+				else:
+					from configparser import ConfigParser
 				cfp = ConfigParser()
 				cfp.read(cffile)
 			else:
@@ -461,7 +473,7 @@ class Db(object):
 		if self._trace is not None:
 			self._trace("DoFn",_cmd,val)
 		if not val:
-			raise NoData,_cmd
+			raise NoData(_cmd)
 
 		as_dict=kv.get("_dict",None)
 		if as_dict:
@@ -470,7 +482,7 @@ class Db(object):
 			names = map(lambda x:x[0], curs.description)
 
 		if curs.fetchone() if hasattr(curs,'fetchone') else curs.rows:
-			raise ManyData,_cmd
+			raise ManyData(_cmd)
 
 		if as_dict:
 			val = as_dict(zip(names,val))
@@ -503,7 +515,7 @@ class Db(object):
 		if self._trace is not None:
 			self._trace("DoFn",_cmd,r)
 		if r == 0 and not kv.has_key("_empty"):
-			raise NoData,_cmd
+			raise NoData(_cmd)
 		return r
 
 	def DoSelect(self, _cmd, **kv):
@@ -588,8 +600,8 @@ class Db(object):
 			if self._trace is not None:
 				self._trace("DoSelect",_cmd,None)
 
-			if not kv.has_key("_empty"):
-				raise NoData,_cmd
+			if '_empty' not in kv:
+				raise NoData(_cmd)
 
 		n=0
 		while val is not None:

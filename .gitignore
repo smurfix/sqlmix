@@ -8,6 +8,7 @@ build/
 build-stamp
 build-python*
 debian/python-sqlmix/
+debian/python3-sqlmix/
 sql_diff
 MANIFEST
 dist

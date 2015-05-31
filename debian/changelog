@@ -1,3 +1,9 @@
+python-sqlmix (0.9.31) smurf; urgency=medium
+
+  * Build a py3 version
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 31 May 2015 09:50:30 +0200
+
 python-sqlmix (0.9.30) smurf; urgency=low
 
   * Build-depend on all the database goodies.
