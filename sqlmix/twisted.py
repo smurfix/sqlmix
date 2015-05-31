@@ -258,24 +258,20 @@ class DbPool(object,service.Service):
 					d.addBoth(pr)
 					res = yield d
 				except (EnvironmentError,NameError):
-					e1,e2,e3 = sys.exc_info()
 					self._denote(db)
 					yield db.rollback()
-					raise e1,e2,e3
+					raise
 				except Exception:
-					if e1 is None:
-						e1,e2,e3 = sys.exc_info()
 					self._denote(db)
 					yield db.rollback()
 					if retry:
 						retry -= 1
 						continue
-					raise e1,e2,e3
+					raise
 				except BaseException:
-					e1,e2,e3 = sys.exc_info()
 					self._denote(db)
 					yield db.rollback()
-					raise e1,e2,e3
+					raise
 				else:
 					self._denote(db)
 					if isinstance(res,BaseException):
