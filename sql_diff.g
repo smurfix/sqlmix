@@ -835,7 +835,7 @@ class Table(object):
 
 			return old_col
 		else:
-			if self.col.has_key(name):
+			if name in self.col:
 				raise DupFieldError(self,name)
 			return Field(self,name)
 
@@ -1398,7 +1398,7 @@ class Schema:
 			for flk in table.best_keys():
 				keys = [ f[0].name for f in flk.fields ]
 				for f in keys:
-					if not old_table.col.has_key(f):
+					if not f in old_table.col:
 						keys=()
 						break
 				if keys:
@@ -1867,7 +1867,7 @@ parser SQL:
 
 	rule s_drop:
 		DROP TABLE (
-			IF EXISTS qname {{ if self.db.tables.has_key(qname): self.db.get_table(qname).drop() }}
+			IF EXISTS qname {{ if qname in self.db.tables: self.db.get_table(qname).drop() }}
 			| qname {{ self.db.get_table(qname).drop() }}
 			)
 

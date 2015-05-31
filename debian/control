@@ -2,7 +2,10 @@ Source: python-sqlmix
 Section: python
 Priority: optional
 Maintainer: Matthias Urlichs <smurf@smurf.noris.de>
-Build-Depends: debhelper (>= 5), python-central (>= 0.5), python-all-dev, python-all-dbg (>= 2.5), python-pysqlite2, yapps2, python-mysqldb, python-ultramysql (>= 2.2)
+Build-Depends: debhelper (>= 5), python-central (>= 0.5), python-all, python3-all,
+	python-pysqlite2, python-mysqldb, python-ultramysql (>= 2.2),
+	python3-pysqlite2, python3-mysql.connector
+	yapps2,
 XS-Python-Version: all
 Standards-Version: 3.7.2
 
