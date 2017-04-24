@@ -514,11 +514,7 @@ class Db(object):
 
 		if self._trace is not None:
 			self._trace("DoFn",_cmd,r)
-<<<<<<< HEAD
 		if r == 0 and not '_empty' in kv:
-=======
-		if r == 0 and not kv.has_key("_empty"):
->>>>>>> refs/remote/github/master
 			raise NoData(_cmd)
 		return r
 
