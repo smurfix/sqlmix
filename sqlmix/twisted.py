@@ -491,5 +491,5 @@ class _DbThread(object):
 		return self._do("DoSelect",*a,**k)
 	Do.__doc__ = sqlmix.Db.Do.__doc__ + "\nReturns a Deferred.\n"
 	DoFn.__doc__ = sqlmix.Db.DoFn.__doc__ + "\nReturns a Deferred.\n"
-	DoSelect.__doc__ = sqlmix.Db.DoSelect.__doc__ + "Returns a Deferred.\n"
+	DoSelect.__doc__ = sqlmix.Db.DoSelect.__doc__ + "\nReturns a Deferred.\n"
 
