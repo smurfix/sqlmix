@@ -4,11 +4,13 @@ export PYBUILD_NAME=sqlmix
 %:
 	dh $@ --with python2,python3 --buildsystem=pybuild
 
-override_dh_auto_build:
+override_dh_auto_build: sql_diff
 	dh_auto_build
-	yapps sql_diff.g
-	mv sql_diff.py sql_diff
-	chmod +x sql_diff
+
+sql_diff: sql_diff.g
+	yapps $^
+	mv $@.py $@
+	chmod +x $@
 
 
 	
