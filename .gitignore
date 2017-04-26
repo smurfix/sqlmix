@@ -4,6 +4,7 @@ debian/files
 debian/*.debhelper
 debian/*.substvars
 debian/*.log
+debian/*-build-stamp
 build/
 build-stamp
 build-python*
@@ -14,3 +15,4 @@ MANIFEST
 dist
 *.pyo
 test.db
+/.pybuild
