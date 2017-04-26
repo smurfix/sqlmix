@@ -16,12 +16,11 @@ filterwarnings("ignore",category=RuntimeWarning,lineno=15)
 async def run_test(x,ai):
   dbp = Db("db"+str(x),config="test.ini")
 
-  async with dbp() as db:
-    try:
-        await db.Do("drop table if exists test1")
-    except NoData:
+  try:
+        await dbp.Do("drop table if exists test1")
+  except NoData:
         pass
-    await db.Do("""\
+  await dbp.Do("""\
         create table test1 (
             id integer primary key not null %s,
             a varchar(255) not null default '',

@@ -339,6 +339,21 @@ class Db(sqlmix.DbPrep):
                 print >>sys.stderr,"Line %d in %s: %s" % (l,f,fn)
                 print >>sys.stderr,"\t"+lin[lini].strip()
 
+    async def Do(self,cmd,**kv):
+        async with self() as db:
+            res = await db.Do(cmd, **kv)
+        return res
+
+    async def DoFn(self,cmd,**kv):
+        async with self() as db:
+            res = await db.DoFn(cmd, **kv)
+        return res
+
+    async def DoSelect(self,cmd,**kv):
+        async with self() as db:
+            res = await db.DoSelect(cmd, **kv)
+        return res
+
 def _do_callback(tid,d,res):
     debug("DO_CB",tid,d,res)
     d.callback(res)
