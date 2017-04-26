@@ -67,6 +67,8 @@ def fixup_error(cmd):
 	k.append(cmd)
 	e2.args=tuple(k)
 
+class _NOTGIVEN: pass
+
 class db_data(object):
 	sequential = False
 	_store = 1 # safe default
@@ -74,15 +76,14 @@ class db_data(object):
 	def __init__(self, **kwargs):
 		"""standard keywords: host,port,database,username,password"""
 		for f in "host port database username password".split():
-			try:
-				v = kwargs[f]
-			except KeyError:
-				pass
-			else:
-				if f == "port":
-					v=int(v)
-				if v is not None:
-					setattr(self,f,v)
+			v = kwargs.pop(f,_NOTGIVEN)
+			if v is _NOTGIVEN:
+				continue
+			if f == "port":
+				v=int(v)
+			setattr(self,f,v)
+		kwargs.setdefault("charset","utf8")
+		self.kwargs = kwargs
 
 class _db_mysql(db_data):
 	_store = 1
@@ -91,10 +92,10 @@ class _db_mysql(db_data):
 	def __init__(self, **kwargs):
 		self.DB = __import__("MySQLdb")
 		self.DB.cursors = __import__("MySQLdb.cursors").cursors
-		db_data.__init__(self,**kwargs)
+		super(_db_mysql,self).__init__(**kwargs)
 
-	def conn(self,**kwargs):
-		return self.DB.connect(db=self.database, host=self.host, user=self.username, passwd=self.password, port=self.port, charset="utf8")
+	def conn(self):
+		return self.DB.connect(db=self.database, host=self.host, user=self.username, passwd=self.password, port=self.port, **self.kwargs)
 
 class _db_ultramysql(db_data):
 	_store = 1
@@ -103,10 +104,10 @@ class _db_ultramysql(db_data):
 	port=3306
 	def __init__(self, **kwargs):
 		self.DB = __import__("umysql")
-		db_data.__init__(self,**kwargs)
+		super(_db_ultramysql,self).__init__(**kwargs)
 		self.DB.paramstyle = 'format'
 
-	def conn(self,**kwargs):
+	def conn(self):
 		c = self.DB.Connection()
 		c.connect(self.host, self.port, self.username, self.password, self.database, False, "utf8")
 		return c
@@ -114,9 +115,9 @@ class _db_ultramysql(db_data):
 class _db_odbc(db_data):
 	def __init__(self, **kwargs):
 		self.DB = __import__("mx.ODBC.iODBC")
-		db_data.__init__(self,**kwargs)
+		super(_db_odbc,self).__init__(**kwargs)
 
-	def conn(self,**kwargs):
+	def conn(self):
 		if self.port:
 			self.host = self.host+":"+str(self.port)
 			self.port=None
@@ -126,9 +127,9 @@ class _db_odbc(db_data):
 class _db_postgres(db_data):
 	def __init__(self, **kwargs):
 		self.DB = __import__("psycopg2")
-		db_data.__init__(self,**kwargs)
+		super(_db_postgres,self).__init__(**kwargs)
 
-	def conn(self,**kwargs):
+	def conn(self):
 		if getattr(self,"port",None):
 			self.host = self.host+":"+str(self.port)
 			self.port=None
@@ -143,9 +144,9 @@ class _db_sqlite(db_data):
 		else:
 			self.DB = __import__("sqlite3.dbapi2")
 		if hasattr(self.DB,"dbapi2"): self.DB=self.DB.dbapi2
-		db_data.__init__(self,**kwargs)
+		super(_db_sqlite,self).__init__(**kwargs)
 
-	def conn(self,**kwargs):
+	def conn(self):
 		return self.DB.connect(self.database)
 
 _databases = {
@@ -225,7 +226,26 @@ class ManyData(Exception):
 #class NoDatabase(Exception):
 #	pass
 
-class Db(object):
+class DbPrep(object):
+	"""Base class for command prep"""
+	def __init__(self):
+		if hasattr(self.DB,'paramstyle'):
+			paramstyle = self.DB.paramstyle
+		else:
+			paramstyle = self.DB.DB.paramstyle
+		(self.arg_init, self.arg_do, self.arg_done) \
+			 = _parsers[paramstyle]
+	def prep(self,_cmd,**kwargs):
+
+		args = self.arg_init()
+		def _prep(name):
+			return self.arg_do(name.group(1), args, kwargs)
+		
+		_cmd = re.sub(r"\$\{([a-zA-Z][a-zA-Z_0-9]*)\}",_prep,_cmd)
+		return self.arg_done(_cmd,args)
+		
+
+class Db(DbPrep):
 	"""\
 	Main database connection object.
 
@@ -244,7 +264,7 @@ class Db(object):
 	def __init__(self, cfg=None, **kwargs):
 		if cfg is not None:
 			try:
-				cffile = kwargs['config']
+				cffile = kwargs.pop('config')
 			except KeyError:
 				from os.path import expanduser as home
 				cffile = home("~/.sqlmix.conf")
@@ -261,15 +281,15 @@ class Db(object):
 			args.update(kwargs)
 			kwargs = args
 
-		self._trace = kwargs.get("trace",None)
+		self._trace = kwargs.pop("trace",None)
 
-		dbtype = kwargs.get("dbtype","mysql")
+		dbtype = kwargs.pop("dbtype","mysql")
 		self.DB = _databases[dbtype](**kwargs)
 		self.DB.dbtype=dbtype
 		if self._trace is not None:
 			self._trace("INIT",dbtype,kwargs)
 
-		if kwargs.get("_single_thread",False):
+		if kwargs.pop("_single_thread",False):
 			self._c = FakeLocal()
 		else:
 			self._c = local()
@@ -279,15 +299,10 @@ class Db(object):
 #			self.CArgs = (self.DB.DB.cursors.CursorNW,)
 #		else:
 		self.CArgs = ()
-		self.isolation = kwargs.get("isolation",None)
+		self.isolation = kwargs.pop("isolation",None)
 #
 
-		if hasattr(self.DB,'paramstyle'):
-			paramstyle = self.DB.paramstyle
-		else:
-			paramstyle = self.DB.DB.paramstyle
-		(self.arg_init, self.arg_do, self.arg_done) \
-			 = _parsers[paramstyle]
+		super(Db,self).__init__()
 		
 	def _conn(self, skip=False):
 		"""Create a connection to the underlying database."""
@@ -425,15 +440,6 @@ class Db(object):
 			self._c.rolledback = []
 		self._c.rolledback.append((proc,a,k))
 
-	def prep(self,_cmd,**kwargs):
-
-		args = self.arg_init()
-		def _prep(name):
-			return self.arg_do(name.group(1), args, kwargs)
-		
-		_cmd = re.sub(r"\$\{([a-zA-Z][a-zA-Z_0-9]*)\}",_prep,_cmd)
-		return self.arg_done(_cmd,args)
-		
 	def DoFn(self, _cmd, **kv):
 		"""Select one (and only one) row.
 
