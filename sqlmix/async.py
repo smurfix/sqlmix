@@ -103,6 +103,7 @@ def debug(*a):
 #                    setattr(self,f,v)
 
 class _db_mysql(sqlmix.db_data):
+    port=3306
     def __init__(self, **kwargs):
         self.DB = __import__("aiomysql")
         super().__init__(**kwargs)
