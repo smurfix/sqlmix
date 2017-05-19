@@ -351,9 +351,15 @@ class Db(sqlmix.DbPrep):
         return res
 
     async def DoSelect(self,cmd,**kv):
-        async with self() as db:
-            res = await db.DoSelect(cmd, **kv)
-        return res
+        raise NotImplementedError("You need to call DoSelect from a transaction")
+        
+## Py3.6
+#   async def DoSelect(self,cmd,**kv):
+#       n = 0
+#       async with self() as db:
+#           async for r in db.DoSelect(cmd,**kv):
+#               yield r
+#       return n
 
 def _do_callback(tid,d,res):
     debug("DO_CB",tid,d,res)
