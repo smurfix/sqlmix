@@ -14,7 +14,7 @@ parameterized SQL syntax.
 """
 
 setup (name = "sqlmix",
-       version = "0.9.21",
+       version = "0.10.5",
        description = description,
        long_description = long_description,
        author = "Matthias Urlichs",
@@ -22,8 +22,8 @@ setup (name = "sqlmix",
         classifiers=[
             'Intended Audience :: Developers',
             'Programming Language :: Python :: 2.7',
-            'Programming Language :: Python :: 3.3',
-            'Programming Language :: Python :: 3.4',
+            'Programming Language :: Python :: 3.5',
+            'Programming Language :: Python :: 3.6',
             'Topic :: Database :: Front-Ends',
             'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
         ],
