@@ -544,14 +544,14 @@ class DbConn(object):
                 if self.as_dict is True:
                     self.as_dict = dict
 
-            def __aiter__(self):
+            async def __aiter__(self):
                 return self
             async def __anext__(self):
                 if self.curs is None:
                     self.curs = curs = await selfi._cursor(cmd, **kv)
 
                     if self.as_dict:
-                        self.names = map(lambda x:x[0], curs.description)
+                        self.names = list(map(lambda x:x[0], curs.description))
                 else:
                     curs = self.curs
                 
@@ -568,7 +568,7 @@ class DbConn(object):
                     raise StopAsyncIteration
 
                 if self.as_dict:
-                    val = self.as_dict(zip(names,val))
+                    val = self.as_dict(zip(self.names,val))
 
                 self.n += 1
                 return val
