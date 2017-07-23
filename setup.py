@@ -13,8 +13,14 @@ parameterized SQL syntax.
 
 """
 
+def get_version(fname='qbroker/__init__.py'):
+    with open(fname) as f:
+        for line in f:
+            if line.startswith('__VERSION__'):
+                return eval(line.split('=')[-1])
+
 setup (name = "sqlmix",
-       version = "0.10.6",
+       version = '.'.join(str(x) for x in get_version()),
        description = description,
        long_description = long_description,
        author = "Matthias Urlichs",

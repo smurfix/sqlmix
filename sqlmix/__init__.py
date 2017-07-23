@@ -38,6 +38,8 @@ import re
 from sys import exc_info
 from threading import local
 
+__VERSION__ = (0,10,6)
+
 PY2 = sys.version_info[0] == 2
 if not PY2:
 	basestring = str
