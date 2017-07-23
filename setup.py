@@ -13,7 +13,7 @@ parameterized SQL syntax.
 
 """
 
-def get_version(fname='qbroker/__init__.py'):
+def get_version(fname='sqlmix/__init__.py'):
     with open(fname) as f:
         for line in f:
             if line.startswith('__VERSION__'):
