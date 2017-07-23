@@ -130,9 +130,6 @@ class _db_postgres(db_data):
 		super(_db_postgres,self).__init__(**kwargs)
 
 	def conn(self):
-		if getattr(self,"port",None):
-			self.host = self.host+":"+str(self.port)
-			self.port=None
 
 		return self.DB.connect(database=self.database,host=self.host, user=self.username, password=self.password)
 
