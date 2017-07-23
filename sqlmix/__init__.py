@@ -131,7 +131,7 @@ class _db_postgres(db_data):
 
 	def conn(self):
 
-		return self.DB.connect(database=self.database,host=self.host, user=self.username, password=self.password)
+		return self.DB.connect(database=self.database,host=self.host, user=self.username, password=self.password, port=self.port)
 
 class _db_sqlite(db_data):
 	sequential = True
