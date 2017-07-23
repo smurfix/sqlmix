@@ -42,11 +42,12 @@ Moreover,
 * Retrying an entire transaction (if it fails due to optimism) is difficult.
   There's no object representing the transaction.
 
-Using an object-oriented wrapper is out of the question: they work synchronously
-and thus are forbidden in asynchronous code.
+`sqlmix` is intended as a tool for small one-off scripts where using an
+object-oriented database wrapper like SqlAlchemywould be serious overkill.
 
-I don't want to multi-thread my main program. Debugging threaded helpers (file system,
-database, possibly other synchronous libraries) is difficult enough.
+There is support for asynchronous operation. Twisted and asyncio are
+supported. Note that asyncio requires `DoSelect` to run within a
+transaction.
 
 -----
 Usage
@@ -80,6 +81,13 @@ Using this module is rather simple.
 
 See "pydoc sqlmix" for further details.
 
+Async use is trivially supported; the database commands return a Deferred /
+an Awaitable. Async ``for`` loops (Python 3.5) are supported.
+
+`DoFn` and `DoSelect` can return a dictionary instead of a list: pass
+`_dict=True`. You may also pass a custom class, it will be instantiated for
+every row.
+
 Error Handling
 --------------
 
@@ -87,7 +95,7 @@ There are two common error cases which _are_ handled:
 
 * a `Do`, `DoFn` or `DoSelect` query does not return any results (or affect any rows).
   You can catch this with an `except NoData` handler, or ignore it with an
-  `empty=1` keyword (except for `DoFn`)
+  `_empty=1` keyword (except for `DoFn`)
 
 * a `DoFn` query returns more than one row. You can catch this with an
   `except ManyData` handler, or ignore it with a `limit 1` SQL clause.
@@ -111,7 +119,7 @@ transactions you open in a particular thread _must_ be closed
 (i.e., committed or rolled back) from that thread.
 
 Beware of database deadlocks. There is no (semi-)automatic retrying
-mechanism. (TODO: There should be.)
+mechanism. (TODO: There probably should be.)
 
 ---------
 Copyright

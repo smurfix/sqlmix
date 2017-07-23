@@ -35,7 +35,7 @@ setup (name = "sqlmix",
         ],
 
        url = "https://github.com/smurfix/sqlmix",
-       license = 'Python',
+       license = 'GPLv3',
        platforms = ['POSIX'],
        packages = ['sqlmix'],
       )
