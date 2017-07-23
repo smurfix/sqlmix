@@ -1,3 +1,10 @@
+python-sqlmix (0.10.7) smurf; urgency=medium
+
+  * Add version to sqlmix/__init__.py
+  * Updated download location to github
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 23 Jul 2017 20:26:41 +0200
+
 python-sqlmix (0.10.6) smurf; urgency=medium
 
   * postgres: fix separate port parameter

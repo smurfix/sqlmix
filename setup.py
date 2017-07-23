@@ -34,7 +34,7 @@ setup (name = "sqlmix",
             'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
         ],
 
-       url = "http://smurf.noris.de/code/",
+       url = "https://github.com/smurfix/sqlmix",
        license = 'Python',
        platforms = ['POSIX'],
        packages = ['sqlmix'],
