@@ -39,7 +39,7 @@ Description: Database-agnostic SQL frontend
 
 Package: python3-sqlmix
 Architecture: all
-Depends: ${python:Depends}, python (>= 2.6)
+Depends: ${python3:Depends}, python (>= 2.6)
 Recommends: python3-mysqldb, python3-ultramysql, python3-psycopg2, python3-pysqlite2
 Suggests: python3-twisted
 Provides: ${python3:Provides}
