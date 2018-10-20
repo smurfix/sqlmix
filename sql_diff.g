@@ -1522,11 +1522,13 @@ class Schema:
 						else: raise RuntimeError("TooManydata")
 
 		def _trans():
-			ndb.Do("SET SQL_LOG_BIN = 0", _empty=1)
-			ndb.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
+			#if opts.execute or opts.execstr:
+			#	ndb.Do("SET SQL_LOG_BIN = 0", _empty=1)
+			#	ndbq.Do("SET SQL_LOG_BIN = 0", _empty=1)
+			#if opts.execstr:
+			#	ndb.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
+			#	ndbq.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
 			ndb.Do("SET UNIQUE_CHECKS = 0", _empty=1)
-			ndbq.Do("SET SQL_LOG_BIN = 0", _empty=1)
-			ndbq.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
 			ndbq.Do("SET UNIQUE_CHECKS = 0", _empty=1)
 
 			odbq.Do("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ", _empty=1)
@@ -1633,8 +1635,10 @@ def main():
 
 	elif opts.db2:
 		db2=Db(opts.db2)
-		db2.Do("SET SQL_LOG_BIN = 0", _empty=1)
-		db2.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
+		if opts.execute or opts.execstr:
+			db2.Do("SET SQL_LOG_BIN = 0", _empty=1)
+		if opts.execstr:
+			db2.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
 
 		db2=Schema(db2)
 
@@ -1679,8 +1683,10 @@ def main():
 
 	elif opts.db1:
 		db1=Db(opts.db1)
-		db1.Do("SET SQL_LOG_BIN = 0", _empty=1)
-		db1.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
+		if opts.execute or opts.execstr:
+			db1.Do("SET SQL_LOG_BIN = 0", _empty=1)
+		if opts.execstr:
+			db1.Do("SET FOREIGN_KEY_CHECKS = 0", _empty=1)
 		db1=Schema(db1)
 
 		if not opts.init:
