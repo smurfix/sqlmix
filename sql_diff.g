@@ -1920,7 +1920,7 @@ parser SQL:
 		{{ fl1=[]; fl2=[] }}
 		"\(" qname {{ fl1.append(t.col[qname]) }}
 			( "," qname {{ fl1.append(t.col[qname]) }} )* "\)"
-		REFERENCES qname {{ rtable=qname }}
+		REFERENCES rqname {{ rtable=qname }}
 		"\(" qname {{ fl2.append(qname) }}
 			( "," qname {{ fl2.append(qname) }} )* "\)"
 		{{ opt={"update":"cascade","delete":"restrict"} }}
@@ -1949,7 +1949,7 @@ parser SQL:
 		  {{ t.new_key(name,ktyp,pkey) }}
 		| ( ( CONSTRAINT {{ name=None }} ( qname {{ name=qname }} )? )
 		  | {{ name=None }} )
-		  FOREIGN KEY? ( qname {{ if name is None: name=qname }} )?
+		  FOREIGN KEY? ( rqname {{ if name is None: name=rqname }} )?
 		  s_create_foreign<<t,name>>
 		| s_create_col<<t,None>>
 
@@ -2001,6 +2001,10 @@ parser SQL:
 
 	rule qname: "`" XNAME "`" {{ return XNAME.lower() }}
 			| NAME {{ return NAME.lower() }}
+
+	rule rqname: qname {{ n = qname }}
+			( "\." qname {{ n += '.'+qname }} )? 
+			{{ return n }}
 
 	rule nval: NULL {{ return None }}
 			| val {{ return val }}
