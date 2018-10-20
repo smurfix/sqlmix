@@ -117,6 +117,7 @@ def print_insert(d):
 	return ('(%s) VALUES (%s)' % (res,resg), resl)
 
 def posval2dict(fieldpos,ar,br=None):
+	d = {}
 	for fd,idx in fieldpos.items():
 		val = ar[idx]
 		if br:
