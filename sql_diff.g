@@ -915,9 +915,10 @@ class Table(object):
 				if fk.name not in s.fknames or s.fknames[fk.name]._diffs(fk,skip_flags=skip_flags):
 					r += ra+"DROP FOREIGN KEY `%s`" % (fk.name,)
 					ra=",\n    "
-		if s.engine and s.engine != o.engine:
-			r += ra+" ENGINE="+s.engine
-			ra=""
+		if 'e' not in skip_flags:
+			if s.engine and s.engine != o.engine:
+				r += ra+" ENGINE="+s.engine
+				ra=""
 		if 'c' not in skip_flags and s.charset and s.charset != o.charset:
 			r += ra+" CHARACTER SET="+s.charset
 			ra=""
@@ -1586,7 +1587,7 @@ def main():
 	parser.add_option("-p","--preload", action="store_true", dest="preload",
 						help="pre-load data descriptions", default=False)
 	parser.add_option("-n","--skip-change", action="store", dest="skip_flags",
-						help="Skip: c=Charset,a=FieldOrder,k=ForeignKey,i=keyName,p=pack,m=max", default="")
+						help="Skip: c=Charset,a=FieldOrder,k=ForeignKey,i=keyName,p=pack,m=max,e=engine", default="")
 	parser.add_option("-N","--skip-table", action="store", dest="skip_tables",
 						help="skip these tables", default="")
 
