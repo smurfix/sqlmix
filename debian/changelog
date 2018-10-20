@@ -1,3 +1,9 @@
+python-sqlmix (0.10.9) smurf; urgency=medium
+
+  * debhelper compat sset to 11
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 20 Oct 2018 16:10:48 +0200
+
 python-sqlmix (0.10.8) smurf; urgency=medium
 
   * New version of sql_mix
