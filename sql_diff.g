@@ -1229,7 +1229,7 @@ class Schema:
 						assert vv is None or vv is v,"%r %r" % (v,vv)
 						tk = t2.possible_key(v)
 						tk = tuple(( f[0].name for f in tk[0].fields ))
-						sk,skl = print_query(common(d,tk)) # where clause
+						sk,skl = print_query(common(vw,tk)) # where clause
 						yield (None, "delete from "+bq(t)+" where "+sk, skl)
 
 
