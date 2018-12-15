@@ -13,4 +13,7 @@ sql_diff: sql_diff.g
 	chmod +x $@
 
 
+override_dh_builddeb:
+	rm -f ./debian/python-sqlmix/usr/lib/python2.7/dist-packages/sqlmix/async_.py
+	dh_builddeb
 	
