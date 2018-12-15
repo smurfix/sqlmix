@@ -8,7 +8,7 @@ Simple test script
 """
 
 import os
-from sqlmix.async import Db,ManyData,NoData
+from sqlmix.async_ import Db,ManyData,NoData
 from warnings import filterwarnings
 
 filterwarnings("ignore",category=RuntimeWarning,lineno=15)

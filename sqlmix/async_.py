@@ -8,7 +8,7 @@ This class is an asyncio-compatible frontend to sqlmix.Db.
 It has the same interface, except that all Do* methods return a future.
 Internally, it works by wrapping aiomysql.
 
- >> import sqlmix.async as sqlmix
+ >> import sqlmix.async_ as sqlmix
  >> dbi = sqlmix.DbPool([args of sqlmix.Db])
  >>
  >> async def foo(what_id):
