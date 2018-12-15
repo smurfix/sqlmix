@@ -256,9 +256,9 @@ class Db(sqlmix.DbPrep):
         Usage:
         >>> async def something(...):
         >>>     dbpool = Db(...) # arguments like sqlmix.Db()
-        >>>        async with dbpool() as db:
-        >>>            d = await db.Do("...")
-        >>>            do_whatever(d)
+        >>>     async with dbpool() as db:
+        >>>         d = await db.Do("...")
+        >>>         do_whatever(d)
 
         The transaction will be committed if you leave the "with" block
         normally or with a CommitThread exception. Otherwise, it will be
