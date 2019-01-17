@@ -3,7 +3,7 @@
 from __future__ import generators,absolute_import
 
 """\
-This class is an asyncio-compatible frontend to sqlmix.Db.
+This class is an anyio-compatible frontend to sqlmix.Db.
 
 It has the same interface, except that all Do* methods return a future.
 Internally, it works by wrapping aiomysql.
@@ -167,11 +167,10 @@ class Db(sqlmix.DbPrep):
         kwargs.setdefault('use_unicode',True)
         kwargs.setdefault('no_delay',True)
         kwargs.setdefault('loop',_loop)
-        kwargs.setdefault('dbtype','mysql')
 
         self.kwargs = kwargs
 
-        dbtype = kwargs.pop("dbtype","mysql")
+        dbtype = kwargs.pop('dbtype','mysql')
         self.DB = _databases[dbtype](**kwargs)
         self.DB.dbtype=dbtype
         if self._trace is not None:
@@ -275,6 +274,8 @@ class Db(sqlmix.DbPrep):
 
         """
         if job is None:
+            if retry:
+                raise RuntimeError("You can't use 'retry' without something to call")
             return DbConn(self)
         return self._call(job,retry)
 
