@@ -1,3 +1,9 @@
+python-sqlmix (0.11.5) smurf; urgency=medium
+
+  * Really toss python2
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 25 Nov 2019 17:20:09 +0100
+
 python-sqlmix (0.11.4) smurf; urgency=medium
 
   * Toss python2

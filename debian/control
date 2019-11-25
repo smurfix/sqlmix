@@ -2,8 +2,7 @@ Source: python-sqlmix
 Section: python
 Priority: optional
 Maintainer: Matthias Urlichs <smurf@smurf.noris.de>
-Build-Depends: debhelper (>= 5), dh-python, python-all, python3-all,
-	python-pysqlite2, python-mysqldb, python-ultramysql (>= 2.2),
+Build-Depends: debhelper (>= 5), dh-python, python3-all,
 	python3-mysql.connector,
 	yapps2,
 XS-Python-Version: all
