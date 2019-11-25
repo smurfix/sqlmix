@@ -9,34 +9,6 @@ Build-Depends: debhelper (>= 5), dh-python, python-all, python3-all,
 XS-Python-Version: all
 Standards-Version: 3.7.2
 
-Package: python-sqlmix
-Architecture: all
-Depends: ${python:Depends}, python (>= 2.6), yapps2-runtime
-Recommends: python-mysqldb, python-ultramysql, python-psycopg2, python-pysqlite2
-Suggests: python-twisted
-Replaces: sqlmix
-Conflicts: sqlmix
-Provides: ${python:Provides}
-XB-Python-Version: ${python:Versions}
-Description: Database-agnostic SQL frontend
- This Python module implements some enhancements for Python SQL:
- .
-  * Common parameters for database setup (no more "db" vs. "database")
- .
-  * Single-line SQL statements and single-row SELECTs:
-    >>> db.Do("insert ...")
-    >>> foo,bar = db.DoFn("select ... where id=123")
- .
-  * SELECT statements which can be used as iterators:
-    >>> for a,b in db.DoSelect("select ..."):
-    >>>     ...
- .
-  * A common and clear syntax for placing values in SQL statements.
-    (The Python DBI supports five incompatible ones.)
-    >>> foo,bar = db.DoFn("select ... where id=\${key}", key=whatever)
- .
- An adapter for the Twisted framework is included.
-
 Package: python3-sqlmix
 Architecture: all
 Depends: ${python3:Depends}, python3 (>= 3.5)
