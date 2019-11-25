@@ -8,7 +8,7 @@ override_dh_auto_build: sql_diff
 	dh_auto_build
 
 sql_diff: sql_diff.g
-	yapps $^
+	yapps2 $^
 	mv $@.py $@
 	chmod +x $@
 
