@@ -38,4 +38,9 @@ setup (name = "sqlmix",
        license = 'GPLv3',
        platforms = ['POSIX'],
        packages = ['sqlmix'],
-      )
+       install_requires=[
+           "anyio",
+           "trio",
+           "trio-mysql",
+       ]
+    )
