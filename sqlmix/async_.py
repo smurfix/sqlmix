@@ -455,9 +455,6 @@ class DbConn(CtxObj):
             self.db._sqlmix_scope = None
             sc.cancel()
 
-    def __del__(self):
-        self.close("__del__")
-
     async def commit(self,res=None):
         await self.db.commit()
         await self._run_committed()
