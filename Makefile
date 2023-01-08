@@ -1,12 +1,15 @@
 #!/usr/bin/make -f
 
-all:
-	@echo "Please use 'python setup.py'."
-	@exit 1
+.PHONY: install
 
-pypi:
-	python3 setup.py sdist upload
-	git tag v$(shell python3 setup.py -V)
+PACKAGE=sqlmix
 
-upload:	pypi
-	git push-all --tags
+ifneq ($(wildcard /usr/share/sourcemgr/make/py),)
+include /usr/share/sourcemgr/make/py
+# availabe via http://github.com/smurfix/sourcemgr
+
+else
+%:
+		@echo "Please use 'python setup.py'."
+		@exit 1
+endif
