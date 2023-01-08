@@ -38,13 +38,6 @@ import re
 from sys import exc_info
 from threading import local
 
-__VERSION__ = (0,10,7)
-
-PY2 = sys.version_info[0] == 2
-if not PY2:
-	basestring = str
-
-
 class CommitThread(Exception):
 	u"""\
 		If you leave a database handler's with … block by raising an
@@ -137,10 +130,7 @@ class _db_postgres(db_data):
 class _db_sqlite(db_data):
 	sequential = True
 	def __init__(self, **kwargs):
-		if PY2:
-			self.DB = __import__("pysqlite2.dbapi2")
-		else:
-			self.DB = __import__("sqlite3.dbapi2")
+		self.DB = __import__("sqlite3.dbapi2")
 		if hasattr(self.DB,"dbapi2"): self.DB=self.DB.dbapi2
 		super(_db_sqlite,self).__init__(**kwargs)
 
@@ -266,11 +256,8 @@ class Db(DbPrep):
 			except KeyError:
 				from os.path import expanduser as home
 				cffile = home("~/.sqlmix.conf")
-			if isinstance(cffile,basestring):
-				if PY2:
-					from ConfigParser import ConfigParser
-				else:
-					from configparser import ConfigParser
+			if isinstance(cffile,str):
+				from configparser import ConfigParser
 				cfp = ConfigParser()
 				cfp.read(cffile)
 			else:

@@ -13,14 +13,9 @@ parameterized SQL syntax.
 
 """
 
-def get_version(fname='sqlmix/__init__.py'):
-    with open(fname) as f:
-        for line in f:
-            if line.startswith('__VERSION__'):
-                return eval(line.split('=')[-1])
-
 setup (name = "sqlmix",
-       version = '.'.join(str(x) for x in get_version()),
+       use_scm_version={"version_scheme": "guess-next-dev", "local_scheme": "dirty-tag"},
+       setup_requires=["setuptools_scm"],
        description = description,
        long_description = long_description,
        author = "Matthias Urlichs",
