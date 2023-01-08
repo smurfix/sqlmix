@@ -253,7 +253,7 @@ class Db(CtxObj, sqlmix.DbPrep):
         except Exception:
             print_exc()
         else:
-            debug("BACK",db.tid)
+            debug("BACK",getattr(db,"tid",None))
     
     async def _clean(self):
         self.cleaner = None
@@ -397,6 +397,7 @@ class DbConn(CtxObj):
     Manage a single connection.
     """
     curs = None
+    db = None
 
     def __init__(self,pool):
         self.pool = pool
@@ -406,26 +407,40 @@ class DbConn(CtxObj):
 
     @asynccontextmanager
     async def _ctx(self):
+        assert self.db is None
+        assert self.curs is None
         self.db = await self.pool._get_db()
         self.DB = self.pool.DB
-        assert self.curs is None
-        async with self.db.cursor():
-            try:
-                yield self
-            except sqlmix.CommitThread:
-                pass
-            except Exception as exc:
-                from traceback import format_exception
-                debug("ERROR",format_exception(exc))
-                await self.rollback()
-                raise
-            try:
-                await self.commit()
-            except sqlmix.CommitThread:
-                pass
-            except Exception as exc:
-                await self.rollback()
-                raise
+        try:
+            async with self.db.cursor():
+                try:
+                    yield self
+
+                except sqlmix.CommitThread:
+                    pass
+                except Exception as exc:
+                    from traceback import format_exception
+                    debug("ERROR",format_exception(exc))
+                    await self.rollback()
+                    raise
+                try:
+                    await self.commit()
+                except sqlmix.CommitThread:
+                    pass
+                except Exception as exc:
+                    await self.rollback()
+                    raise
+        except Exception:
+            self.pool._put_db(self.db)
+            raise
+        except BaseException:
+            await self.db.aclose()
+            raise
+        else:
+            self.pool._put_db(self.db)
+        finally:
+            self.db = None
+
 
     def call_committed(self,proc,*a,**k):
         self.committed.append((proc,a,k))
