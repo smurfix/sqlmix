@@ -14,7 +14,7 @@ from warnings import filterwarnings
 filterwarnings("ignore",category=RuntimeWarning,lineno=15)
 
 async def run_test(x,ai):
-  dbp = Db("db"+str(x),config="test.ini")
+ async with Db("db"+str(x),config="test.ini") as dbp:
 
   try:
         await dbp.Do("drop table if exists test1")
@@ -74,7 +74,5 @@ async def run_tests():
     await run_test(2,"auto_increment")
 #run_test(3,"auto_increment","drop table if exists test1")
 
-import asyncio
-l = asyncio.get_event_loop()
-l.run_until_complete(run_tests())
-l.stop()
+import anyio
+anyio.run(run_tests, backend="trio")

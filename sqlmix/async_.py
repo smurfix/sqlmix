@@ -6,7 +6,7 @@ from __future__ import generators,absolute_import
 This class is an anyio-compatible frontend to sqlmix.Db.
 
 It has the same interface, except that all Do* methods return a future.
-Internally, it works by wrapping aiomysql.
+Internally it works by wrapping trio-mysql or aiopg (asyncio backend only).
 
  >> import sqlmix.async_ as sqlmix
  >> dbi = sqlmix.DbPool([args of sqlmix.Db])
@@ -43,8 +43,9 @@ import string
 import re
 import sys
 from traceback import print_exc
-import asyncio
-import aiomysql
+from contextlib import asynccontextmanager
+
+import anyio
 
 import logging
 logger = logging.getLogger(__name__)
@@ -105,13 +106,20 @@ def debug(*a):
 class _db_mysql(sqlmix.db_data):
     port=3306
     def __init__(self, **kwargs):
-        self.DB = __import__("aiomysql")
+        self.DB = __import__("trio_mysql")
         super().__init__(**kwargs)
-        self.DB.cursors = __import__("aiomysql.cursors").cursors
+        self.DB.cursors = __import__("trio_mysql.cursors").cursors
         self.DB.paramstyle = 'format'
 
-    def conn(self):
-        return self.DB.connect(db=self.database, host=self.host, user=self.username, password=self.password, port=self.port, **self.kwargs)
+    async def _conn(self, task_status):
+        with anyio.CancelScope() as sc:
+            async with self.DB.connect(db=self.database, host=self.host, user=self.username, password=self.password, port=self.port, **self.kwargs) as conn:
+                conn._sqlmix_scope = sc
+                task_status.started(conn)
+                await anyio.sleep_forever()
+
+    async def conn(self, db):
+        return await db._tg.start(self._conn)
 
 
 class _db_postgres(sqlmix.db_data):
@@ -119,15 +127,29 @@ class _db_postgres(sqlmix.db_data):
         self.DB = __import__("aiopg")
         super().__init__(**kwargs)
 
-    def conn(self):
-        return self.DB.connect(self.database)
+    async def conn(self, db):
+        res = await self.DB.connect(self.database)
+        res._sqlmix_scope = None
+        return res
 
 _databases = {
     "mysql": _db_mysql,
     "postgres": _db_postgres,
 }
 
-class Db(sqlmix.DbPrep):
+class CtxObj:
+    __ctx = None
+    async def __aenter__(self):
+        if self.__ctx is not None:
+            raise RuntimeError("duplicate context")
+        self.__ctx = ctx = self._ctx()  # pylint: disable=E1101,W0201
+        return await ctx.__aenter__()
+
+    def __aexit__(self, *tb):
+        ctx,self.__ctx = self.__ctx,None
+        return ctx.__aexit__(*tb)
+
+class Db(CtxObj, sqlmix.DbPrep):
     """\
     Manage a pool of database connections.
     """
@@ -136,7 +158,7 @@ class Db(sqlmix.DbPrep):
     _trace = None
     db = None
 
-    def __init__(self,cfg=None, dbtype='mysql', _loop=None, _timeout=None, **kwargs):
+    def __init__(self,cfg=None, dbtype='mysql', _timeout=None, **kwargs):
         """\
         Create a pool of database connections, for processing (a sequence of)
         SQL commands.
@@ -160,13 +182,9 @@ class Db(sqlmix.DbPrep):
 
         if _timeout is not None:
             self.timeout = _timeout
-        if _loop is None:
-            _loop = asyncio.get_event_loop()
-        self.loop = _loop
 
         kwargs.setdefault('use_unicode',True)
-        kwargs.setdefault('no_delay',True)
-        kwargs.setdefault('loop',_loop)
+        # kwargs.setdefault('no_delay',True)
 
         self.kwargs = kwargs
 
@@ -191,6 +209,13 @@ class Db(sqlmix.DbPrep):
 
         super(Db,self).__init__()
 
+    @asynccontextmanager
+    async def _ctx(self):
+        async with anyio.create_task_group() as self._tg:
+            yield self
+            self._tg.cancel_scope.cancel()
+
+
     def stop2(self):
         if self.db is not None:
             for db in self.db:
@@ -199,12 +224,20 @@ class Db(sqlmix.DbPrep):
     def stop(self):
         self.stopping = True
 
+    @asynccontextmanager
+    async def db(self):
+        res = await self._get_db()
+        try:
+            yield res
+        finally:
+            self._put_db(res)
+
     async def _get_db(self):
         if self.db:
             r = self.db.pop()[0]
             s="OLD"
         else:
-            r = await self.DB.conn()
+            r = await self.DB.conn(self)
             s="NEW"
 
         debug(s)
@@ -214,27 +247,22 @@ class Db(sqlmix.DbPrep):
         if self.db is None or self.stopping:
             db.close()
             return
-        for d in self.db:
-            if db is d[0]:
-                raise RuntimeError("DoubleQueued")
         try:
             t = time()+self.timeout
             self.db.append((db,t))
-            if self.cleaner is None:
-                self.cleaner = self.loop.call_later(self.timeout,self._clean)
         except Exception:
             print_exc()
         else:
             debug("BACK",db.tid)
     
-    def _clean(self):
+    async def _clean(self):
         self.cleaner = None
-        t = time()
-        while self.db and self.db[0][1] <= t:
-            db = self.db.pop(0)[0]
-            db.close()
-        if self.db:
-            self.cleaner = self.loop.call_later(self.db[0][1]-t,self._clean)
+        while self.db:
+            t = time()
+            while self.db and self.db[0][1] <= t:
+                db = self.db.pop(0)[0]
+                db.close()
+            await anyio.sleep(self.db[0][1]-t)
 
     def close(self):
         if self.cleaner:
@@ -243,9 +271,6 @@ class Db(sqlmix.DbPrep):
         while self.db:
             db = self.db.pop(0)[0]
             db.close()
-
-    def __del__(self):
-        self.close()
 
     def __call__(self, job=None,retry=0):
         """\
@@ -367,7 +392,7 @@ def _do_callback(tid,d,res):
     d.callback(res)
     debug("DID_CB",tid,d,res)
 
-class DbConn(object):
+class DbConn(CtxObj):
     """\
     Manage a single connection.
     """
@@ -379,27 +404,28 @@ class DbConn(object):
         self.rolledback = []
         self._trace = pool._trace
 
-    async def __aenter__(self):
+    @asynccontextmanager
+    async def _ctx(self):
         self.db = await self.pool._get_db()
         self.DB = self.pool.DB
         assert self.curs is None
-        await self.db.begin()
-        self.curs = await self.db.cursor()
-        return self
-
-    async def __aexit__(self, a,b,c):
-        await self.curs.close()
-        self.curs = None
-        if b is None or isinstance(b,sqlmix.CommitThread):
+        async with self.db.cursor():
+            try:
+                yield self
+            except sqlmix.CommitThread:
+                pass
+            except Exception as exc:
+                from traceback import format_exception
+                debug("ERROR",format_exception(exc))
+                await self.rollback()
+                raise
             try:
                 await self.commit()
+            except sqlmix.CommitThread:
+                pass
             except Exception as exc:
-                b = exc
-        if b is not None and not isinstance(b,sqlmix.CommitThread):
-            from traceback import format_exception
-            debug("ERROR",format_exception(a,b,c))
-            await self.rollback()
-        return False
+                await self.rollback()
+                raise
 
     def call_committed(self,proc,*a,**k):
         self.committed.append((proc,a,k))
@@ -424,6 +450,10 @@ class DbConn(object):
         if self.curs is not None:
             self.curs.close()
             self.curs = None
+        sc = self.db._sqlmix_scope
+        if sc is not None:
+            self.db._sqlmix_scope = None
+            sc.cancel()
 
     def __del__(self):
         self.close("__del__")
@@ -439,8 +469,8 @@ class DbConn(object):
     async def _cursor(self, cmd, **kv):
         cmd = self.pool.prep(cmd, **kv)
         try:
-            curs = await self.db.cursor()
-            await curs.execute(*cmd)
+            async with self.db.cursor() as curs:
+                await curs.execute(*cmd)
         except:
             fixup_error(cmd)
             raise
@@ -470,7 +500,7 @@ class DbConn(object):
         if ((await curs.fetchone()) is not None) if hasattr(curs,'fetchone') else curs.rows:
             raise ManyData(cmd)
         if self.curs is None:
-            curs.close()
+            await curs.aclose()
 
         if as_dict:
             val = as_dict(zip(names,val))
@@ -484,7 +514,7 @@ class DbConn(object):
         if not r:
             r = curs.rowcount
         if self.curs is None:
-            curs.close()
+            await curs.aclose()
 
         if self._trace is not None:
             self._trace("Do",cmd,r)
@@ -551,8 +581,9 @@ class DbConn(object):
                 if self.as_dict is True:
                     self.as_dict = dict
 
-            async def __aiter__(self):
+            def __aiter__(self):
                 return self
+
             async def __anext__(self):
                 if self.curs is None:
                     self.curs = curs = await selfi._cursor(cmd, **kv)
