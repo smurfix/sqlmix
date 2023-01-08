@@ -16,3 +16,4 @@ dist
 *.pyo
 test.db
 /.pybuild
+/*.egg-info/
