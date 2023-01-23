@@ -164,6 +164,8 @@ class Db(CtxObj, sqlmix.DbPrep):
         SQL commands.
         """
 
+        self._open = set()
+
         if cfg is not None:
             try:
                 cffile = kwargs.pop('config')
@@ -237,20 +239,19 @@ class Db(CtxObj, sqlmix.DbPrep):
             r = await self.DB.conn(self)
             s="NEW"
 
+        self._open.add(r._sqlmix_scope)
+
         debug(s)
         return r
 
     def _put_db(self,db):
+        self._open.remove(db._sqlmix_scope)
         if self.db is None or self.stopping:
             db.close()
             return
-        try:
-            t = time()+self.timeout
-            self.db.append((db,t))
-        except Exception:
-            print_exc()
-        else:
-            debug("BACK",getattr(db,"tid",None))
+        t = time()+self.timeout
+        self.db.append((db,t))
+        debug("BACK",getattr(db,"tid",None))
     
     async def _clean(self):
         self.cleaner = None
@@ -268,8 +269,9 @@ class Db(CtxObj, sqlmix.DbPrep):
         while self.db:
             db = self.db.pop(0)[0]
             db._sqlmix_scope.cancel()
+        for sc in self._open:
+            sc.cancel()
         self._tg.cancel_scope.cancel()
-
 
     def __call__(self, job=None,retry=0):
         """\
@@ -354,16 +356,6 @@ class Db(CtxObj, sqlmix.DbPrep):
     def _denote(self,x):
         if not _DEBUG: return
         del self._tb[x.tid]
-    def _dump(self):
-        if not _DEBUG: return
-        for a,b in self._tb.items():
-            #(<frame object at 0x8a1b724>, '/mnt/daten/src/git/sqlmix/sqlmix/twisted.py', 250, '_note', ['\t\tself._tb[x.tid] = inspect.stack(1)\n'], 0)
-
-            print >>sys.stderr,"Stack",a
-            for fr,f,l,fn,lin,lini in b[::-1]:
-                if fn == "__call__": break
-                print >>sys.stderr,"Line %d in %s: %s" % (l,f,fn)
-                print >>sys.stderr,"\t"+lin[lini].strip()
 
     async def Do(self,cmd,**kv):
         async with self() as db:
@@ -433,7 +425,7 @@ class DbConn(CtxObj):
             self.pool._put_db(self.db)
             raise
         except BaseException:
-            await self.db.aclose()
+            db._sqlmix_scope.cancel()
             raise
         else:
             self.pool._put_db(self.db)
@@ -500,7 +492,7 @@ class DbConn(CtxObj):
         if self._trace is not None:
             self._trace("DoFn",cmd,val)
         if not val:
-            raise NoData(cmd)
+            raise NoData(cmd,kv)
 
         as_dict=kv.get("_dict",None)
         if as_dict:
