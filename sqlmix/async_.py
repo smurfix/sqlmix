@@ -249,13 +249,9 @@ class Db(CtxObj, sqlmix.DbPrep):
         if self.db is None or self.stopping:
             db.close()
             return
-        try:
-            t = time()+self.timeout
-            self.db.append((db,t))
-        except Exception:
-            print_exc()
-        else:
-            debug("BACK",getattr(db,"tid",None))
+        t = time()+self.timeout
+        self.db.append((db,t))
+        debug("BACK",getattr(db,"tid",None))
     
     async def _clean(self):
         self.cleaner = None
@@ -360,16 +356,6 @@ class Db(CtxObj, sqlmix.DbPrep):
     def _denote(self,x):
         if not _DEBUG: return
         del self._tb[x.tid]
-    def _dump(self):
-        if not _DEBUG: return
-        for a,b in self._tb.items():
-            #(<frame object at 0x8a1b724>, '/mnt/daten/src/git/sqlmix/sqlmix/twisted.py', 250, '_note', ['\t\tself._tb[x.tid] = inspect.stack(1)\n'], 0)
-
-            print >>sys.stderr,"Stack",a
-            for fr,f,l,fn,lin,lini in b[::-1]:
-                if fn == "__call__": break
-                print >>sys.stderr,"Line %d in %s: %s" % (l,f,fn)
-                print >>sys.stderr,"\t"+lin[lini].strip()
 
     async def Do(self,cmd,**kv):
         async with self() as db:
