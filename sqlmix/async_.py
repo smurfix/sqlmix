@@ -492,7 +492,7 @@ class DbConn(CtxObj):
         if self._trace is not None:
             self._trace("DoFn",cmd,val)
         if not val:
-            raise NoData(cmd)
+            raise NoData(cmd,kv)
 
         as_dict=kv.get("_dict",None)
         if as_dict:
