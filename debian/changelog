@@ -1,3 +1,9 @@
+python-sqlmix (0.12.4.1) smurf; urgency=medium
+
+  * Merge
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 23 Jan 2023 13:00:58 +0100
+
 python-sqlmix (0.12.3.1) smurf; urgency=medium
 
   * Merge

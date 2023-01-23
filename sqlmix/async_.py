@@ -112,7 +112,7 @@ class _db_mysql(sqlmix.db_data):
         self.DB.paramstyle = 'format'
 
     async def _conn(self, task_status):
-        with anyio.CancelScope() as sc:
+        with anyio.CancelScope(shield=True) as sc:
             async with self.DB.connect(db=self.database, host=self.host, user=self.username, password=self.password, port=self.port, **self.kwargs) as conn:
                 conn._sqlmix_scope = sc
                 task_status.started(conn)
@@ -212,14 +212,11 @@ class Db(CtxObj, sqlmix.DbPrep):
     @asynccontextmanager
     async def _ctx(self):
         async with anyio.create_task_group() as self._tg:
-            yield self
-            self._tg.cancel_scope.cancel()
+            try:
+                yield self
+            finally:
+                self.close()
 
-
-    def stop2(self):
-        if self.db is not None:
-            for db in self.db:
-                db[0].close("AfterShutdown Service")
 
     def stop(self):
         self.stopping = True
@@ -270,7 +267,9 @@ class Db(CtxObj, sqlmix.DbPrep):
             self.cleaner = None
         while self.db:
             db = self.db.pop(0)[0]
-            db.close()
+            db._sqlmix_scope.cancel()
+        self._tg.cancel_scope.cancel()
+
 
     def __call__(self, job=None,retry=0):
         """\
