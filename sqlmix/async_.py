@@ -164,8 +164,6 @@ class Db(CtxObj, sqlmix.DbPrep):
         SQL commands.
         """
 
-        self._open = set()
-
         if cfg is not None:
             try:
                 cffile = kwargs.pop('config')
@@ -239,15 +237,13 @@ class Db(CtxObj, sqlmix.DbPrep):
             r = await self.DB.conn(self)
             s="NEW"
 
-        self._open.add(r._sqlmix_scope)
 
         debug(s)
         return r
 
     def _put_db(self,db):
-        self._open.remove(db._sqlmix_scope)
         if self.db is None or self.stopping:
-            db.close()
+            db._sqlmix_scope.cancel()
             return
         t = time()+self.timeout
         self.db.append((db,t))
@@ -263,14 +259,13 @@ class Db(CtxObj, sqlmix.DbPrep):
             await anyio.sleep(self.db[0][1]-t)
 
     def close(self):
+        self.stopping = True
         if self.cleaner:
             self.cleaner.cancel()
             self.cleaner = None
         while self.db:
             db = self.db.pop(0)[0]
             db._sqlmix_scope.cancel()
-        for sc in self._open:
-            sc.cancel()
         self._tg.cancel_scope.cancel()
 
     def __call__(self, job=None,retry=0):
@@ -425,7 +420,7 @@ class DbConn(CtxObj):
             self.pool._put_db(self.db)
             raise
         except BaseException:
-            db._sqlmix_scope.cancel()
+            self.db._sqlmix_scope.cancel()
             raise
         else:
             self.pool._put_db(self.db)
