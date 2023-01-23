@@ -216,10 +216,6 @@ class Db(CtxObj, sqlmix.DbPrep):
             self._tg.cancel_scope.cancel()
 
 
-    def stop2(self):
-        if self.db is not None:
-            for db in self.db:
-                db[0].close("AfterShutdown Service")
 
     def stop(self):
         self.stopping = True
