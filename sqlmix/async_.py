@@ -103,6 +103,20 @@ def debug(*a):
 #                if v is not None:
 #                    setattr(self,f,v)
 
+class ConnEvt:
+    scope=None
+    db=None
+
+    def __init__(self):
+        self.evt = anyio.Event()
+
+    def set(self, db):
+        self.db = db
+        self.evt.set()
+
+    async def wait(self):
+        await self.evt.wait()
+
 class _db_mysql(sqlmix.db_data):
     port=3306
     def __init__(self, **kwargs):
@@ -111,15 +125,18 @@ class _db_mysql(sqlmix.db_data):
         self.DB.cursors = __import__("trio_mysql.cursors").cursors
         self.DB.paramstyle = 'format'
 
-    async def _conn(self, task_status):
+    async def _conn(self, evt):
         with anyio.CancelScope(shield=True) as sc:
+            evt.scope=sc
             async with self.DB.connect(db=self.database, host=self.host, user=self.username, password=self.password, port=self.port, **self.kwargs) as conn:
+                evt.set(conn)
                 conn._sqlmix_scope = sc
-                task_status.started(conn)
                 await anyio.sleep_forever()
 
-    async def conn(self, db):
-        return await db._tg.start(self._conn)
+    def conn(self, db):
+        evt = ConnEvt()
+        db._tg.start_soon(self._conn, evt)
+        return evt
 
 
 class _db_postgres(sqlmix.db_data):
@@ -234,9 +251,17 @@ class Db(CtxObj, sqlmix.DbPrep):
             r = self.db.pop()[0]
             s="OLD"
         else:
-            r = await self.DB.conn(self)
+            evt = self.DB.conn(self)
+            try:
+                await evt.wait()
+            except BaseException as e:
+                if evt.scope is not None:
+                    evt.scope.cancel()
+                # otherwise let's hope that the job won't run
+                raise
+            else:
+                r = evt.db
             s="NEW"
-
 
         debug(s)
         return r
@@ -266,6 +291,8 @@ class Db(CtxObj, sqlmix.DbPrep):
         while self.db:
             db = self.db.pop(0)[0]
             db._sqlmix_scope.cancel()
+        for sc in self._open:
+            sc.cancel()
         self._tg.cancel_scope.cancel()
 
     def __call__(self, job=None,retry=0):
