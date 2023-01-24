@@ -310,7 +310,7 @@ class Db(CtxObj, sqlmix.DbPrep):
         e1 = None
         try:
             while True:
-                db = self._get_db(mtid)
+                db = self._get_db()
                 self._note(db)
                 try:
                     debug("CALL JOB",mtid)
