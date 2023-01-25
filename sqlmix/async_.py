@@ -68,8 +68,8 @@ def debug_(flag,*a):
             return "\n".join((pr(y).strip("\n") for y in x))
         elif isinstance(x,bytes):
             try:
-                return unicode(x)
-            except:
+                return x.decode("utf-8")
+            except Exception:
                 return repr(x)
         elif isinstance(x,str):
             return x
