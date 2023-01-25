@@ -566,7 +566,7 @@ class DbConn(CtxObj):
         if as_dict is True:
             as_dict = dict
         if as_dict:
-            names = map(lambda x:x[0], curs.description)
+            names = list(map(lambda x:x[0], curs.description))
 
         try:
             while True:
