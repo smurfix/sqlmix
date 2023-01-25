@@ -598,7 +598,7 @@ class DbConn(CtxObj):
 #            raise NoData(_cmd)
 
     def DoSelect(selfi,cmd,**kv):
-        debug("DOSEL",self.id,cmd,kv)
+        debug("DOSEL",selfi.id,cmd,kv)
         class SelectCmd(object):
             curs = None
             names = None
