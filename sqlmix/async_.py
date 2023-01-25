@@ -403,6 +403,7 @@ class DbConn(CtxObj):
     """
     curs = None
     db = None
+    work = 0
 
     def __init__(self,pool):
         self.pool = pool
@@ -479,13 +480,19 @@ class DbConn(CtxObj):
             sc.cancel()
 
     async def commit(self,res=None):
+        if self.work == 0:
+            return
         debug("COMMIT",self.id)
         await self.db.commit()
+        self.work = 0
         await self._run_committed()
 
     async def rollback(self,res=None):
+        if self.work == 0:
+            return
         debug("ROLLBACK",self.id)
         await self.db.rollback()
+        self.work = 0
         await self._run_rolledback()
 
     async def _cursor(self, cmd, **kv):
@@ -500,6 +507,7 @@ class DbConn(CtxObj):
         
     async def DoFn(self, cmd, **kv):
         debug("DOFN",self.id,cmd,kv)
+        self.work += 1
         curs = await self._cursor(cmd, **kv)
 
         if hasattr(curs,'fetchone'):
@@ -532,6 +540,7 @@ class DbConn(CtxObj):
     async def Do(self, cmd, **kv):
         """Database-specific Do function"""
         debug("DO",self.id,cmd,kv)
+        self.work += 1
         curs = await self._cursor(cmd, **kv)
 
         r = curs.lastrowid
@@ -549,6 +558,7 @@ class DbConn(CtxObj):
     async def DoSelect(self, cmd, **kv):
         """Database-specific DoSelect function"""
         debug("DOSEL",self.id,cmd,kv)
+        self.work += 1
         curs = await self._cursor(cmd, **kv)
 
         n = 0
