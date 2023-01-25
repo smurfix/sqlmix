@@ -292,8 +292,6 @@ class Db(CtxObj, sqlmix.DbPrep):
         while self.db:
             db = self.db.pop(0)[0]
             db._sqlmix_scope.cancel()
-        for sc in self._open:
-            sc.cancel()
         self._tg.cancel_scope.cancel()
 
     def __call__(self, job=None,retry=0):
