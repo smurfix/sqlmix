@@ -380,24 +380,17 @@ class Db(CtxObj, sqlmix.DbPrep):
 
     async def Do(self,cmd,**kv):
         async with self() as db:
-            res = await db.Do(cmd, **kv)
-        return res
+            return await db.Do(cmd, **kv)
 
     async def DoFn(self,cmd,**kv):
         async with self() as db:
-            res = await db.DoFn(cmd, **kv)
-        return res
+            return await db.DoFn(cmd, **kv)
 
     async def DoSelect(self,cmd,**kv):
-        raise NotImplementedError("You need to call DoSelect from a transaction")
-        
-## Py3.6
-#   async def DoSelect(self,cmd,**kv):
-#       n = 0
-#       async with self() as db:
-#           async for r in db.DoSelect(cmd,**kv):
-#               yield r
-#       return n
+        n = 0
+        async with self() as db:
+            async for r in db.DoSelect(cmd,**kv):
+                yield r
 
 def _do_callback(tid,d,res):
     debug("DO_CB",tid,d,res)
@@ -549,101 +542,47 @@ class DbConn(CtxObj):
 
         if self._trace is not None:
             self._trace("Do",cmd,r)
-        if r == 0 and not '_empty' in kv:
-            raise NoData(cmd)
+        if r == 0 and not kv.get('_empty', False):
+            raise NoData(cmd, kv)
         return r
 
-# Py3.6
-#    async def DoSelect(self, cmd, **kv):
-#        """Database-specific DoSelect function"""
-#        cmd = self.db.prep(cmd, **kv)
-#
-#        try:
-#            curs = await self.cursor()
-#
-#            await curs.execute(*_cmd)
-#        except:
-#            fixup_error(_cmd)
-#            raise
-#
-#        n = 0
-#        as_dict=kv.get("_dict",None)
-#        if as_dict is True:
-#            as_dict = dict
-#        if as_dict:
-#            names = map(lambda x:x[0], curs.description)
-#
-#        try:
-#            while True:
-#                if hasattr(curs,'fetchone'):
-#                    val = await curs.fetchone()
-#                elif not curs.rows:
-#                    break
-#                else:
-#                    val = curs.rows.pop(0)
-#
-#                if ((await curs.fetchone()) is not None) if hasattr(curs,'fetchone') else curs.rows:
-#                    raise ManyData(_cmd)
-#                if as_dict:
-#                    val = as_dict(zip(names,val))
-#
-#                yield val
-#
-#        finally:
-#            if self._trace is not None:
-#                self._trace("DoSel",_cmd,val)
-#            if self.curs is None:
-#                curs.close()
-#        if n == 0 and not self.maybe_empty:
-#            raise NoData(_cmd)
+    async def DoSelect(self, cmd, **kv):
+        """Database-specific DoSelect function"""
+        debug("DOSEL",self.id,cmd,kv)
+        curs = await self._cursor(cmd, **kv)
 
-    def DoSelect(selfi,cmd,**kv):
-        debug("DOSEL",selfi.id,cmd,kv)
-        class SelectCmd(object):
-            curs = None
-            names = None
+        n = 0
+        as_dict=kv.get("_dict",None)
+        if as_dict is True:
+            as_dict = dict
+        if as_dict:
+            names = map(lambda x:x[0], curs.description)
 
-            def __init__(self,cmd,**k):
-                self.cmd = cmd
-                self.k = k
-
-                self.n = 0
-                self.as_dict=k.pop("_dict",False)
-                self.maybe_empty=k.pop("_empty",False)
-                if self.as_dict is True:
-                    self.as_dict = dict
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                if self.curs is None:
-                    self.curs = curs = await selfi._cursor(cmd, **kv)
-
-                    if self.as_dict:
-                        self.names = list(map(lambda x:x[0], curs.description))
-                else:
-                    curs = self.curs
-                
+        try:
+            while True:
                 if hasattr(curs,'fetchone'):
                     val = await curs.fetchone()
+                    if val is None:
+                        break
                 elif not curs.rows:
-                    val = None
+                    break
                 else:
                     val = curs.rows.pop(0)
 
-                if val is None:
-                    if self.n == 0 and not self.maybe_empty:
-                        raise NoData(self.cmd)
-                    raise StopAsyncIteration
+                if as_dict:
+                    val = as_dict(zip(names,val))
 
-                if self.as_dict:
-                    val = self.as_dict(zip(self.names,val))
+                n += 1
+                yield val
 
-                self.n += 1
-                return val
-
-        return SelectCmd(cmd,**kv)
+        finally:
+            if self._trace is not None:
+                self._trace("DoSel",_cmd,val)
+            if self.curs is None:
+                with anyio.move_on_after(3, shield=True):
+                    await curs.aclose()
+        if n == 0 and not kv.get('_empty', False):
+            raise NoData(cmd, kv)
 
     Do.__doc__ = sqlmix.Db.Do.__doc__ + "\nReturns a Future.\n"
     DoFn.__doc__ = sqlmix.Db.DoFn.__doc__ + "\nReturns a Future.\n"
