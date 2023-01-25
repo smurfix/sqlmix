@@ -174,6 +174,7 @@ class Db(CtxObj, sqlmix.DbPrep):
     cleaner = None
     _trace = None
     db = None
+    id_seq = 0
 
     def __init__(self,cfg=None, dbtype='mysql', _timeout=None, **kwargs):
         """\
@@ -417,6 +418,8 @@ class DbConn(CtxObj):
         self.committed = []
         self.rolledback = []
         self._trace = pool._trace
+        pool.id_seq += 1
+        self.id = pool.id_seq
 
     @asynccontextmanager
     async def _ctx(self):
@@ -475,6 +478,7 @@ class DbConn(CtxObj):
                 logger.exception(proc)
 
     def close(self,reason="???"):
+        debug("CLOSE",self.id)
         if self.curs is not None:
             self.curs.close()
             self.curs = None
@@ -484,10 +488,12 @@ class DbConn(CtxObj):
             sc.cancel()
 
     async def commit(self,res=None):
+        debug("COMMIT",self.id)
         await self.db.commit()
         await self._run_committed()
 
     async def rollback(self,res=None):
+        debug("ROLLBACK",self.id)
         await self.db.rollback()
         await self._run_rolledback()
 
@@ -502,6 +508,7 @@ class DbConn(CtxObj):
         return curs
         
     async def DoFn(self, cmd, **kv):
+        debug("DOFN",self.id,cmd,kv)
         curs = await self._cursor(cmd, **kv)
 
         if hasattr(curs,'fetchone'):
@@ -533,6 +540,7 @@ class DbConn(CtxObj):
 
     async def Do(self, cmd, **kv):
         """Database-specific Do function"""
+        debug("DO",self.id,cmd,kv)
         curs = await self._cursor(cmd, **kv)
 
         r = curs.lastrowid
@@ -592,6 +600,7 @@ class DbConn(CtxObj):
 #            raise NoData(_cmd)
 
     def DoSelect(selfi,cmd,**kv):
+        debug("DOSEL",self.id,cmd,kv)
         class SelectCmd(object):
             curs = None
             names = None
