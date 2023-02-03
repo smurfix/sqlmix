@@ -230,6 +230,7 @@ class Db(CtxObj, sqlmix.DbPrep):
     @asynccontextmanager
     async def _ctx(self):
         async with anyio.create_task_group() as self._tg:
+            await self._tg.start(self._clean)
             try:
                 yield self
             finally:
@@ -275,14 +276,19 @@ class Db(CtxObj, sqlmix.DbPrep):
         self.db.append((db,t))
         debug("BACK",getattr(db,"tid",None))
     
-    async def _clean(self):
-        self.cleaner = None
-        while self.db:
-            t = time()
-            while self.db and self.db[0][1] <= t:
-                db = self.db.pop(0)[0]
-                db.close()
-            await anyio.sleep(self.db[0][1]-t)
+    async def _clean(self, task_status):
+        with anyio.CancelScope() as self.cleaner:
+            task_status.started()
+            while True:
+                if not self.db:
+                    await anyio.sleep(self.timeout)
+                    continue
+                t = time()
+                if self.db[0][1] <= t:
+                    db = self.db.pop(0)[0]
+                    db.close()
+                    continue
+                await anyio.sleep(self.db[0][1]-t)
 
     def close(self):
         self.stopping = True
